@@ -33,6 +33,9 @@ export const AGENT_TICK_SEC = 5
 /** 자동으로 연 패널을 다시 그리는 시점(ms), 두 번째 시점에 보이지 않으면 안내 */
 export const PANE_SETTLE_MS = [500, 2000] as const
 
+/** 대시보드 제목 줄의 한도 막대 칸 수 */
+export const LIMIT_BAR_SEGMENTS = 6
+
 /** 사이드바 패널의 기본 너비(칸) */
 export const PANE_DOCK_COLUMNS = 56
 

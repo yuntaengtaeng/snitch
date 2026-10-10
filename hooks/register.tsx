@@ -81,6 +81,7 @@ export function register(on: On) {
     agents: agents.view(),
     files: workFiles.view(),
     reasons: reasons.view(),
+    limits: statusLine.limits(),
   })
 
   on('session.start', async ($, e, next) => {
@@ -164,6 +165,7 @@ export function register(on: On) {
 
   on('session.measure', async ($, e, next) => {
     statusLine.measured(e.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })))
+    redraw()
     return next(e)
   })
 

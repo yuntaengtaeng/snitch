@@ -57,5 +57,7 @@ export function createStatusLine(deps: { getHost: () => Host | null; editedCount
     commandRan() {
       commands += 1
     },
+
+    limits: (): readonly RateLimit[] => rateLimits,
   }
 }

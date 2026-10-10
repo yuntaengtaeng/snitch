@@ -5,10 +5,17 @@ import type { AgentsView } from '../agents/tracker'
 import * as C from '../config'
 import { fileUrl, splitPath } from '../paths'
 import type { ReasonsView } from '../reasons/tracker'
+import { limitGauge, type LimitGauge, type RateLimit } from '../status-line/text'
 import type { WorkFilesView } from '../work-files/tracker'
 import * as V from '../work-files/view'
 
-export type DashboardView = { agents: AgentsView; files: WorkFilesView; reasons: ReasonsView }
+export type DashboardView = {
+  agents: AgentsView
+  files: WorkFilesView
+  reasons: ReasonsView
+  /** 요금제 한도 사용률, 구독 요금제가 아니면 빈 배열 */
+  limits: readonly RateLimit[]
+}
 
 type Ui = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Link'>
 
@@ -20,6 +27,16 @@ const STATE_COLOR: Record<R.AgentState, 'inactive' | 'warning' | 'success' | 'er
 }
 
 const EXPLAINING_TEXT = '변경 이유 정리 중…'
+
+const GAUGE_COLOR: Record<LimitGauge['level'], 'success' | 'warning' | 'error'> = {
+  plenty: 'success',
+  half: 'warning',
+  low: 'error',
+}
+
+function gaugesOf(view: DashboardView): LimitGauge[] {
+  return view.limits.map(l => limitGauge(l, C.LIMIT_BAR_SEGMENTS))
+}
 
 /** 파일 하나의 변경 이유와 위치, 요약 중이면 요약 중 문구 */
 function noteOf(view: DashboardView, path: string): V.FileNote & { isExplaining: boolean } {
@@ -37,7 +54,8 @@ function noteOf(view: DashboardView, path: string): V.FileNote & { isExplaining:
 export function dashboardText(view: DashboardView): string {
   const agents = R.agentsText(view.agents.agents, view.agents.now)
   const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
-  return `${agents}\n\n${files}`
+  const limits = gaugesOf(view).map(g => `${g.label} ${g.remaining}% 남음`).join(', ')
+  return `snitch${limits ? `  ${limits}` : ''}\n\n${agents}\n\n${files}`
 }
 
 /** 패널을 열 때 요청할 줄 수 */
@@ -90,11 +108,20 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
     </Box>
   )
 
-  /** 개수가 붙은 구역 제목 */
-  const section = (key: string, title: string, count: number) => (
-    <Box key={key} marginTop={1}>
-      <Text bold>{title}</Text>
-      <Text color="inactive">{` ${count}`}</Text>
+  /** 개수가 붙은 구역 제목, right 는 오른쪽 끝에 붙는 요약 */
+  const section = (key: string, title: string, count: number, right?: RenderChildren) => (
+    <Box key={key} marginTop={1} flexDirection="row">
+      <Box flexGrow={1} flexShrink={1}>
+        <Text bold>{title}</Text>
+        <Text color="inactive">{` ${count}`}</Text>
+      </Box>
+      {right ? (
+        <Box flexShrink={0} marginLeft={1}>
+          {right}
+        </Box>
+      ) : (
+        <Text />
+      )}
     </Box>
   )
 
@@ -156,8 +183,13 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
         'header',
         <Text bold>snitch</Text>,
         <Text>
-          <Text color="inactive">{`${all.files} files  `}</Text>
-          {stat(all)}
+          {gaugesOf(view).map((g, i) => (
+            <Text key={`g-${g.label}`}>
+              <Text color="inactive">{`${i > 0 ? '  ' : ''}${g.label} `}</Text>
+              <Text color={GAUGE_COLOR[g.level]}>{g.bar}</Text>
+              <Text color="inactive">{` ${g.remaining}%`}</Text>
+            </Text>
+          ))}
         </Text>,
       )}
       <Text key="divider" color="inactive">
@@ -165,7 +197,7 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
       </Text>
       {section('s-agents', '에이전트', agents.agents.length)}
       {agentRows}
-      {section('s-files', '변경 파일', current.length)}
+      {section('s-files', '변경 파일', current.length, current.length > 0 ? stat(all) : undefined)}
       {current.length === 0 ? (
         <Text key="empty" color="inactive">
           없음

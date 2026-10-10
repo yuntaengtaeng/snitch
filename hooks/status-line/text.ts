@@ -41,3 +41,25 @@ export function statusText(input: {
 
   return parts.join('  |  ')
 }
+
+export type LimitGauge = {
+  /** 5h, 7d 같은 한도 이름 */
+  label: string
+  /** 남은 비율(0~100, 정수) */
+  remaining: number
+  /** 남은 만큼 채운 막대 */
+  bar: string
+  level: 'plenty' | 'half' | 'low'
+}
+
+/** 사용률을 남은 한도 막대로 바꾼 값, segments 는 막대 칸 수 */
+export function limitGauge(limit: RateLimit, segments: number): LimitGauge {
+  const remaining = Math.min(100, Math.max(0, Math.round(100 - limit.percentUsed)))
+  const filled = Math.round((remaining / 100) * segments)
+  return {
+    label: LIMIT_LABEL[limit.kind] ?? limit.kind,
+    remaining,
+    bar: '▰'.repeat(filled) + '▱'.repeat(segments - filled),
+    level: remaining < 20 ? 'low' : remaining < 50 ? 'half' : 'plenty',
+  }
+}
