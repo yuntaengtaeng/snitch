@@ -6,10 +6,12 @@ export const ENABLE = {
   modelEffort: true,
   /** 작업 파일 패널과 /changes 명령 */
   workFiles: true,
+  /** 작업 파일의 변경 이유 한 줄, 턴마다 REASON_MODEL 한 번 호출 */
+  changeReasons: true,
 }
 
 export const PANE_ID = 'k-work-files'
-export const PANE_TITLE = '작업 파일'
+export const PANE_TITLE = 'snitch'
 export const CHANGES_COMMAND = 'changes'
 
 /** 작업 파일로 추적할 편집 툴 */
@@ -17,6 +19,15 @@ export const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] as cons
 
 /** 전체화면 레이아웃에서 세션마다 패널을 자동으로 열지 여부 */
 export const PANE_AUTO_OPEN = true
+
+/** 패널을 열 때 요청하는 최대 높이(줄) */
+export const PANE_MAX_ROWS = 30
+
+/** 대시보드에 남겨 둘 끝난 서브에이전트 수 */
+export const AGENT_MAX_FINISHED = 5
+
+/** 작업 중인 에이전트가 있을 때 대시보드를 다시 그리는 주기(초) */
+export const AGENT_TICK_SEC = 5
 
 /** 사이드바 패널의 기본 너비(칸) */
 export const PANE_DOCK_COLUMNS = 56
@@ -33,5 +44,14 @@ export const CONFLICT_POLL_SEC = 20
 /** 패널 배경색. null 이면 테마 배경색 */
 export const PANE_BACKGROUND: string | null = null
 
-/** 비용 기록 보관 기간(일) */
-export const COST_KEEP_DAYS = 7
+/** 변경 이유를 요약할 모델 (별칭 또는 모델 ID) */
+export const REASON_MODEL = 'haiku'
+
+/** 변경 이유 요약 요청에 넣을 diff 최대 글자 수 (파일 전체 합) */
+export const REASON_DIFF_CHARS = 12_000
+
+/** 변경 이유 한 줄의 최대 글자 수 */
+export const REASON_MAX_CHARS = 40
+
+/** 변경 이유 요약 요청의 제한 시간(초) */
+export const REASON_TIMEOUT_SEC = 30

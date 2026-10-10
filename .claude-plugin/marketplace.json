@@ -6,7 +6,7 @@
     {
       "name": "snitch",
       "source": "./",
-      "description": "상태줄(한도·오늘 비용·세션 작업량)과 작업 파일 패널(/changes)"
+      "description": "상태줄(한도·세션 작업량)과 작업 파일 패널(/changes)"
     }
   ]
 }
