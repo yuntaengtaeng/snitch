@@ -6,7 +6,7 @@
     {
       "name": "snitch",
       "source": "./",
-      "description": "상태줄(한도·세션 작업량)과 작업 파일 패널(/changes)"
+      "description": "상태줄(한도, 세션 작업량)과 대시보드 패널(/snitch, 에이전트 현황, 변경 파일과 변경 이유)"
     }
   ]
 }

@@ -5,6 +5,9 @@ import type { CommitEntry, FileStat } from './git'
 
 export type Totals = { files: number; added: number; deleted: number }
 
+/** 파일 이름 아래에 붙는 설명, 변경 이유와 위치(폴더, 고친 서브에이전트 작업) */
+export type FileNote = { reason?: string; place: string }
+
 export const CONFLICT_LABEL = '⚠ 다른 세션도 수정 중'
 
 export function totalsOf(files: FileStat[]): Totals {
@@ -28,41 +31,39 @@ export function statText(f: { added: number | null; deleted: number | null }): s
   return `+${f.added} −${f.deleted}`
 }
 
-/** 작업 파일 구역의 텍스트 버전 */
+/** 폴더와 고친 서브에이전트 작업 이름을 쉼표로 이은 위치 문구 */
+export function placeOf(path: string, task: string): string {
+  return [splitPath(path).dir, task].filter(Boolean).join(', ')
+}
+
+/** 변경 파일과 커밋 구역의 텍스트 버전 */
 export function filesText(
   commits: CommitEntry[],
   current: FileStat[],
-  reasons: ReadonlyMap<string, string> = new Map(),
+  noteOf: (path: string) => FileNote = path => ({ place: placeOf(path, '') }),
 ): string {
-  const all = totalsOf(current)
-  const lines: string[] = []
-  lines.push(`작업 파일 · ${all.files} files  +${all.added} −${all.deleted}`)
+  const lines = [`변경 파일 ${current.length}`]
+  if (current.length === 0) lines.push('  없음')
+  for (const f of current) {
+    const warn = f.otherSessions ? `  ${CONFLICT_LABEL}` : ''
+    lines.push(`  ${statusLetter(f)} ${splitPath(f.path).name}  ${statText(f)}${warn}`)
+    const { reason, place } = noteOf(f.path)
+    if (reason) lines.push(`    ${reason}`)
+    if (place) lines.push(`    ${place}`)
+  }
 
   if (commits.length > 0) {
-    lines.push('', '커밋')
+    lines.push('', `커밋 ${commits.length}`)
     for (const c of commits) {
       lines.push(`  ● ${c.hash} ${c.subject}  ${statText(totalsOf(c.files))}`)
     }
-    lines.push('', '커밋 이후')
-  }
-
-  if (current.length === 0) {
-    lines.push('  편집한 파일 없음')
-  }
-  for (const f of current) {
-    const { name, dir } = splitPath(f.path)
-    const warn = f.otherSessions ? `  ${CONFLICT_LABEL}` : ''
-    lines.push(`  ${statusLetter(f)} ${name}  ${statText(f)}${warn}`)
-    const reason = reasons.get(f.path)
-    if (reason) lines.push(`    이유: ${reason}`)
-    if (dir) lines.push(`    ${dir}`)
   }
   return lines.join('\n')
 }
 
-/** 작업 파일 구역의 예상 줄 수, reasonLines 는 이유 줄이 있는 파일 수 */
-export function filesRows(commits: CommitEntry[], current: FileStat[], reasonLines = 0): number {
-  const commitRows = commits.length > 0 ? commits.length + 4 : 0
-  const fileRows = current.length === 0 ? 1 : current.length * 2 + reasonLines
-  return 2 + commitRows + fileRows
+/** 변경 파일과 커밋 구역의 예상 줄 수, noteLines 는 파일 아래 설명 줄 수의 합 */
+export function filesRows(commits: CommitEntry[], current: FileStat[], noteLines = 0): number {
+  const fileRows = 2 + Math.max(1, current.length) + noteLines
+  const commitRows = commits.length > 0 ? 2 + commits.length : 0
+  return fileRows + commitRows
 }

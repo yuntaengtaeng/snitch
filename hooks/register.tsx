@@ -21,6 +21,7 @@ function createHost($: EngineInterface): Host {
     storeKeys: () => $.store.keys(),
     now: () => $.clock.now(),
     status: text => $.ui.status(text),
+    toast: text => $.ui.toast(text),
     invalidate: () => $.ui.invalidate('ui.render'),
     openPane: rows =>
       $.ui.open({
@@ -40,6 +41,7 @@ function createHost($: EngineInterface): Host {
       }
     },
     every: (ms, fn) => $.clock.every(ms, fn),
+    after: (ms, fn) => $.clock.after(ms, fn),
     complete: async (prompt, system) => {
       const r = await $.model.complete({
         model: C.REASON_MODEL,
@@ -103,14 +105,16 @@ export function register(on: On) {
     ]
 
     if (C.ENABLE.workFiles) {
-      await $.command
-        .register({
-          name: C.CHANGES_COMMAND,
-          description: '에이전트 현황과 이 세션에서 편집한 파일 대시보드',
-          argumentHint: '[text]',
-          immediate: true,
-        })
-        .catch(() => undefined)
+      for (const name of [C.DASHBOARD_COMMAND, C.CHANGES_COMMAND]) {
+        await $.command
+          .register({
+            name,
+            description: '에이전트 현황과 변경 파일 대시보드, text 는 텍스트 출력, why 는 변경 이유 다시 요약',
+            argumentHint: '[text|why]',
+            immediate: true,
+          })
+          .catch(() => undefined)
+      }
     }
 
     statusLine.update()
@@ -185,16 +189,24 @@ export function register(on: On) {
     return r
   })
 
-  /** /changes 로 패널 열기와 닫기, text 인자나 좁은 전체화면이면 텍스트 출력 */
-  on('command.run', { command: C.CHANGES_COMMAND }, async ($, e, next) => {
+  /** /snitch, /changes 로 패널 열기와 닫기, text 는 텍스트 출력, why 는 변경 이유 다시 요약 */
+  on('command.run', { command: [C.DASHBOARD_COMMAND, C.CHANGES_COMMAND] }, async ($, e, next) => {
     if (!workFiles.view().repoRoot || !host) {
       return { text: '이 폴더는 git 저장소가 아니라서 작업 파일을 추적하지 않아요.' }
     }
     await workFiles.refresh()
+    const arg = e.args.trim()
+
+    if (arg === 'why') {
+      const paths = workFiles.view().current.map(f => f.path)
+      if (paths.length === 0) return { text: '이유를 정리할 변경 파일 없음' }
+      reasons.explainNow(paths)
+      return { text: `변경 파일 ${paths.length}개의 이유 다시 정리 중` }
+    }
 
     const isTooNarrowToDock =
       e.presentation.isFullscreen && e.presentation.columns < C.PANE_MIN_COLUMNS
-    if (e.args.trim() === 'text' || isTooNarrowToDock) {
+    if (arg === 'text' || isTooNarrowToDock) {
       return { text: dashboardText(dashboard()) }
     }
 
@@ -202,13 +214,27 @@ export function register(on: On) {
     if (pane?.isOpen && pane.isPlaced && pane.isShown) {
       await host.closePane().catch(() => undefined)
       isPaneOpen = false
-      return { text: '대시보드 패널을 닫았어요.' }
+      return { text: '대시보드 패널 닫음' }
     }
 
     await host.openPane(dashboardRows(dashboard()))
     isPaneOpen = true
     return {}
-  }).catch(() => ({ text: '대시보드를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }))
+  }).catch(() => ({ text: '대시보드 불러오기 실패, 잠시 후 다시 시도' }))
+
+  /** 자동으로 연 패널을 화면 배치 뒤에 다시 그리고, 그래도 안 보이면 /snitch 안내 */
+  function settleAutoOpenedPane() {
+    host?.after(C.PANE_SETTLE_MS[0], redraw)
+    host?.after(C.PANE_SETTLE_MS[1], () => {
+      redraw()
+      void host
+        ?.paneState()
+        .then(pane => {
+          if (pane.isOpen && !(pane.isPlaced && pane.isShown)) host?.toast('대시보드 패널 배치 대기 중, /snitch 로 열기')
+        })
+        .catch(() => undefined)
+    })
+  }
 
   /** 전체화면 레이아웃이면 세션당 한 번 패널 자동 열기 */
   on('ui.render', { component: 'PromptHint' }, ($, e, next) => {
@@ -217,9 +243,12 @@ export function register(on: On) {
     if (canAutoOpen && e.viewport?.isFullscreen === true) {
       hasAutoOpened = true
       isPaneOpen = true
-      void host?.openPane(dashboardRows(dashboard())).catch(() => {
-        isPaneOpen = false
-      })
+      void host
+        ?.openPane(dashboardRows(dashboard()))
+        .then(() => settleAutoOpenedPane())
+        .catch(() => {
+          isPaneOpen = false
+        })
     }
     return next(e)
   })

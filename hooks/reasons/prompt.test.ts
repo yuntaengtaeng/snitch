@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseReasons, reasonPrompt } from './prompt'
+import { parseReasons, reasonPrompt, tidyReason } from './prompt'
 
 const LIMITS = { diffChars: 12_000, reasonChars: 40 }
 
@@ -42,4 +42,10 @@ test('parseReasons: 공백을 한 줄로 합치고 너무 긴 이유는 자른�
 test('parseReasons: JSON 이 아니면 빈 결과', () => {
   expect(parseReasons('요약할 수 없어요', ['a.ts'], 40).size).toBe(0)
   expect(parseReasons('{깨진 json}', ['a.ts'], 40).size).toBe(0)
+})
+
+test('tidyReason: 끝 마침표, 가운뎃점, 화살표, 따옴표를 걷어 낸다', () => {
+  expect(tidyReason('"README 설명 추가."')).toBe('README 설명 추가')
+  expect(tidyReason('회의 결정 · 할 일 공유')).toBe('회의 결정, 할 일 공유')
+  expect(tidyReason('설정 → 상태줄 반영')).toBe('설정 상태줄 반영')
 })

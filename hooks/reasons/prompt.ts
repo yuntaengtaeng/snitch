@@ -3,8 +3,13 @@
 /** 변경 이유를 물을 파일 하나의 레포 기준 경로와 HEAD 대비 변경 내용 */
 export type ChangedFile = { path: string; diff: string }
 
-export const REASON_SYSTEM =
-  '너는 코드 리뷰어를 돕는 요약가다. 각 파일을 무엇을 바꿨는지가 아니라 왜 바꿨는지 한 줄로 설명한다. 지시대로 JSON 객체 하나만 출력한다.'
+export const REASON_SYSTEM = [
+  '너는 코드 리뷰어를 돕는 요약가다. 각 파일을 왜 바꿨는지 짧은 명사구 한 줄로 적는다.',
+  '규칙: 1) 명사로 끝냄 (~함, ~위해, ~합니다 금지) 2) 목적과 대상만, 군더더기 없이',
+  '3) 마침표, 가운뎃점, 화살표, 따옴표, 이모지 금지 4) 지시대로 JSON 객체 하나만 출력',
+  '좋은 예: "로그인 실패 시 재시도 안내 추가", "회의 결정과 할 일 공유용 회의록"',
+  '나쁜 예: "주간 회의 결정 사항과 액션 아이템을 팀에 공유하기 위해", "README를 수정함."',
+].join('\n')
 
 function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n…(생략)`
@@ -28,6 +33,17 @@ export function reasonPrompt(
   ].join('\n\n')
 }
 
+/** 한 줄로 합치고 UI 금지 문자를 걷어 낸 변경 이유 */
+export function tidyReason(text: string): string {
+  return text
+    .replace(/[←-⇿⟵-⟿]/g, ' ')
+    .replace(/\s*[·•—–]\s*/g, ', ')
+    .replace(/["'“”‘’]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[\s.。,]+$/, '')
+    .trim()
+}
+
 /** 모델 응답 JSON 에서 꺼낸 파일별 변경 이유, 묻지 않은 경로와 빈 값 제외 */
 export function parseReasons(text: string, paths: string[], maxChars: number): Map<string, string> {
   const reasons = new Map<string, string>()
@@ -46,8 +62,8 @@ export function parseReasons(text: string, paths: string[], maxChars: number): M
   const asked = new Set(paths)
   for (const [path, value] of Object.entries(parsed)) {
     if (!asked.has(path) || typeof value !== 'string') continue
-    const line = value.replace(/\s+/g, ' ').trim()
-    if (line) reasons.set(path, line.length > maxChars ? `${line.slice(0, maxChars - 1)}…` : line)
+    const reason = tidyReason(value)
+    if (reason) reasons.set(path, reason.length > maxChars ? `${reason.slice(0, maxChars - 1)}…` : reason)
   }
   return reasons
 }

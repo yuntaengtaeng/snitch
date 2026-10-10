@@ -70,6 +70,12 @@ export function createReasons(deps: {
       }
     },
 
+    /** /changes why 로 요청한 파일들의 이유 즉시 다시 요약, 자동 요약 설정과 무관 */
+    explainNow(paths: string[]) {
+      paths.forEach(p => pending.delete(p))
+      void explain(paths, '').catch(() => undefined)
+    },
+
     /** 커밋된 파일의 이유 삭제 */
     forget(paths: string[]) {
       paths.forEach(p => reasons.delete(p))

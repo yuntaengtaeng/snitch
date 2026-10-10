@@ -12,21 +12,23 @@ export type AgentEntry = {
   state: AgentState
   /** 현재 상태로 바뀐 시각(ms) */
   since: number
+  /** 마지막으로 작업 중이 된 시각(ms) */
+  startedAt: number
   /** 마지막 툴 호출 요약, 없으면 null */
   activity: string | null
 }
 
 export const MAIN_ID = 'main'
 
-export const STATE_LABEL: Record<AgentState, string> = {
-  waiting: '대기',
-  working: '작업 중',
-  done: '완료',
-  error: '오류',
+export const STATE_ICON: Record<AgentState, string> = {
+  waiting: '○',
+  working: '●',
+  done: '✓',
+  error: '✕',
 }
 
 export function mainAgent(at: number): AgentEntry {
-  return { id: MAIN_ID, name: 'main', task: '', state: 'waiting', since: at, activity: null }
+  return { id: MAIN_ID, name: 'main', task: '', state: 'waiting', since: at, startedAt: at, activity: null }
 }
 
 /** 새로 시작한 서브에이전트를 작업 중 상태로 추가한 목록 */
@@ -35,13 +37,18 @@ export function withSpawned(
   spawn: { id: string; name: string; task: string },
   at: number,
 ): AgentEntry[] {
-  const entry: AgentEntry = { ...spawn, state: 'working', since: at, activity: null }
+  const entry: AgentEntry = { ...spawn, state: 'working', since: at, startedAt: at, activity: null }
   return [...roster.filter(a => a.id !== spawn.id), entry]
 }
 
-/** id 에이전트의 상태를 바꾼 목록, 같은 상태면 그대로 */
+/** id 에이전트의 상태를 바꾼 목록, 같은 상태면 그대로, 작업 중이 되면 시작 시각과 활동 초기화 */
 export function withState(roster: AgentEntry[], id: string, state: AgentState, at: number): AgentEntry[] {
-  return roster.map(a => (a.id === id && a.state !== state ? { ...a, state, since: at } : a))
+  return roster.map(a => {
+    if (a.id !== id || a.state === state) return a
+    return state === 'working'
+      ? { ...a, state, since: at, startedAt: at, activity: null }
+      : { ...a, state, since: at }
+  })
 }
 
 /** id 에이전트의 마지막 활동을 바꾼 목록 */
@@ -87,23 +94,41 @@ export function stateAfterTurn(reason: string, isMain: boolean): AgentState {
   return reason === 'answer' ? 'done' : 'error'
 }
 
-/** 표시할 에이전트 목록: 메인 대화, 진행 중인 에이전트, 최근 끝난 에이전트 maxFinished 개 순서 */
-export function visibleAgents(roster: AgentEntry[], maxFinished: number): AgentEntry[] {
-  const isFinished = (a: AgentEntry) => a.state === 'done' || a.state === 'error'
-  const main = roster.filter(a => a.id === MAIN_ID)
-  const active = roster.filter(a => a.id !== MAIN_ID && !isFinished(a))
-  const finished = roster
-    .filter(a => a.id !== MAIN_ID && isFinished(a))
-    .sort((a, b) => b.since - a.since)
-    .slice(0, maxFinished)
+function isFinished(a: AgentEntry): boolean {
+  return a.state === 'done' || a.state === 'error'
+}
+
+/** 끝난 지 keepMs 가 지난 서브에이전트를 뺀 목록 */
+export function withoutExpired(roster: AgentEntry[], now: number, keepMs: number): AgentEntry[] {
+  return roster.filter(a => a.id === MAIN_ID || !isFinished(a) || now - a.since < keepMs)
+}
+
+/** 상태 확인이 필요한 에이전트가 있는지 여부, 작업 중이거나 아직 사라지지 않은 끝난 에이전트 */
+export function needsTick(roster: AgentEntry[]): boolean {
+  return roster.some(a => a.state === 'working' || (a.id !== MAIN_ID && isFinished(a)))
+}
+
+/** 표시 순서의 에이전트 목록, 메인 대화, 진행 중, 끝난 지 keepMs 안 된 에이전트 순 */
+export function visibleAgents(roster: AgentEntry[], now: number, keepMs: number): AgentEntry[] {
+  const shown = withoutExpired(roster, now, keepMs)
+  const main = shown.filter(a => a.id === MAIN_ID)
+  const active = shown.filter(a => a.id !== MAIN_ID && !isFinished(a))
+  const finished = shown.filter(a => a.id !== MAIN_ID && isFinished(a)).sort((a, b) => b.since - a.since)
   return [...main, ...active, ...finished]
 }
 
-/** 툴 호출 하나의 요약 문구 (예: Write a.md, Bash npm test) */
+/** 명령 속 경로를 파일 이름만 남긴 문구 (cat /c/r/notes/a.md 는 cat a.md) */
+export function shortenPaths(text: string): string {
+  return text.replace(/(?:[A-Za-z]:)?(?:[\\/][^\s'"\\/]+)+[\\/]([^\s'"\\/]+)/g, '$1')
+}
+
+/** 툴 호출 하나의 요약 문구 (예: Write a.md, cat a.md, Grep TODO) */
 export function activityOf(tool: string, input: Record<string, unknown>): string {
   const path = input['file_path'] ?? input['notebook_path']
   if (typeof path === 'string') return `${tool} ${path.split(/[\\/]/).pop() ?? path}`
-  for (const key of ['command', 'pattern', 'url', 'description']) {
+  const command = input['command']
+  if (typeof command === 'string' && command.trim()) return shortenPaths(command.trim().split('\n')[0] ?? '')
+  for (const key of ['pattern', 'url', 'description']) {
     const value = input[key]
     if (typeof value === 'string' && value.trim()) return `${tool} ${value.trim().split('\n')[0]}`
   }
@@ -119,28 +144,33 @@ export function durationText(ms: number): string {
   return min % 60 ? `${Math.floor(min / 60)}시간 ${min % 60}분` : `${Math.floor(min / 60)}시간`
 }
 
-/** 에이전트 한 줄 상태 문구 (예: 작업 중, 11초, Write a.md / 완료, 30초 전) */
-export function statusLine(a: AgentEntry, now: number): string {
-  const label = STATE_LABEL[a.state]
-  const elapsed = now - a.since
-  if (a.state === 'working') {
-    return [label, durationText(elapsed), a.activity].filter(Boolean).join(', ')
-  }
-  if (a.state === 'waiting') return label
-  return `${label}, ${elapsed < 10_000 ? '방금' : `${durationText(elapsed)} 전`}`
+/** 에이전트 제목, 서브에이전트는 작업 이름, 메인 대화는 main */
+export function titleOf(a: AgentEntry): string {
+  return a.task || a.name
+}
+
+/** 오른쪽에 붙는 시간, 작업 중이면 경과 시간, 끝났으면 걸린 시간, 대기면 빈 문자열 */
+export function timeText(a: AgentEntry, now: number): string {
+  if (a.state === 'waiting') return ''
+  return durationText((a.state === 'working' ? now : a.since) - a.startedAt)
+}
+
+/** 제목 아래에 들여 쓰는 줄, 작업 중일 때 마지막 활동 */
+export function detailLines(a: AgentEntry): string[] {
+  return a.state === 'working' && a.activity ? [a.activity] : []
 }
 
 /** 에이전트 구역의 텍스트 버전 */
 export function agentsText(agents: AgentEntry[], now: number): string {
-  const lines = ['에이전트']
+  const lines = [`에이전트 ${agents.length}`]
   for (const a of agents) {
-    lines.push(`  ${a.name}${a.task ? `  ${a.task}` : ''}`)
-    lines.push(`    ${statusLine(a, now)}`)
+    lines.push(`  ${STATE_ICON[a.state]} ${titleOf(a)}  ${timeText(a, now)}`.trimEnd())
+    for (const d of detailLines(a)) lines.push(`    ${d}`)
   }
   return lines.join('\n')
 }
 
 /** 에이전트 구역의 예상 줄 수 */
 export function agentsRows(agents: AgentEntry[]): number {
-  return 2 + agents.length * 2
+  return 2 + agents.reduce((n, a) => n + 1 + detailLines(a).length, 0)
 }

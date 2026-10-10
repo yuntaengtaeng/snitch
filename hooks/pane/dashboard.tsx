@@ -19,24 +19,41 @@ const STATE_COLOR: Record<R.AgentState, 'inactive' | 'warning' | 'success' | 'er
   error: 'error',
 }
 
+const EXPLAINING_TEXT = '변경 이유 정리 중…'
+
+/** 파일 하나의 변경 이유와 위치, 요약 중이면 요약 중 문구 */
+function noteOf(view: DashboardView, path: string): V.FileNote & { isExplaining: boolean } {
+  const { reasons, explaining } = view.reasons
+  const editorId = view.files.editedBy.get(path)
+  const isExplaining = !reasons.has(path) && explaining.has(path)
+  return {
+    reason: reasons.get(path) ?? (isExplaining ? EXPLAINING_TEXT : undefined),
+    place: V.placeOf(path, editorId ? view.agents.taskOf(editorId) : ''),
+    isExplaining,
+  }
+}
+
 /** /changes text 와 좁은 화면용 텍스트 버전 */
 export function dashboardText(view: DashboardView): string {
-  const { agents, files, reasons } = view
-  return `${R.agentsText(agents.agents, agents.now)}\n\n${V.filesText(files.commits, files.current, reasons.reasons)}`
+  const agents = R.agentsText(view.agents.agents, view.agents.now)
+  const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
+  return `${agents}\n\n${files}`
 }
 
 /** 패널을 열 때 요청할 줄 수 */
 export function dashboardRows(view: DashboardView): number {
-  const { reasons, explaining } = view.reasons
-  const reasonLines = view.files.current.filter(f => reasons.has(f.path) || explaining.has(f.path)).length
-  const rows = R.agentsRows(view.agents.agents) + V.filesRows(view.files.commits, view.files.current, reasonLines)
+  const noteLines = view.files.current.reduce((n, f) => {
+    const { reason, place } = noteOf(view, f.path)
+    return n + (reason ? 1 : 0) + (place ? 1 : 0)
+  }, 0)
+  const rows = 2 + R.agentsRows(view.agents.agents) + V.filesRows(view.files.commits, view.files.current, noteLines)
   return Math.min(rows, C.PANE_MAX_ROWS)
 }
 
-/** 에이전트 구역과 작업 파일 구역으로 된 대시보드 패널 */
+/** 에이전트, 변경 파일, 커밋 구역으로 된 대시보드 패널 */
 export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
   const { Box, Text, Link } = ui
-  const { agents, files, reasons } = view
+  const { agents, files } = view
   const { repoRoot, commits, current } = files
   const all = V.totalsOf(current)
 
@@ -64,44 +81,43 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
     </Box>
   )
 
-  const label = (key: string, text: string) => (
-    <Box key={key} marginTop={1}>
-      <Text color="inactive" bold>
+  /** 들여 쓴 보조 한 줄 */
+  const detail = (key: string, text: string, color?: 'inactive', italic = false) => (
+    <Box key={key} paddingLeft={2}>
+      <Text color={color} italic={italic} wrap="truncate-end">
         {text}
       </Text>
     </Box>
   )
 
+  /** 개수가 붙은 구역 제목 */
+  const section = (key: string, title: string, count: number) => (
+    <Box key={key} marginTop={1}>
+      <Text bold>{title}</Text>
+      <Text color="inactive">{` ${count}`}</Text>
+    </Box>
+  )
+
   const agentRows = agents.agents.map(a => (
     <Box key={`a-${a.id}`} flexDirection="column">
-      <Text wrap="truncate-end">
-        <Text color={STATE_COLOR[a.state]}>●</Text>
-        <Text> </Text>
-        <Text bold>{a.name}</Text>
-        <Text color="inactive">{a.task ? `  ${a.task}` : ''}</Text>
-      </Text>
-      <Box paddingLeft={2}>
-        <Text color={a.state === 'error' ? 'error' : 'inactive'} wrap="truncate-end">
-          {R.statusLine(a, agents.now)}
-        </Text>
-      </Box>
+      {row(
+        `ar-${a.id}`,
+        <Text wrap="truncate-end">
+          <Text color={STATE_COLOR[a.state]}>{R.STATE_ICON[a.state]}</Text>
+          <Text bold={a.state === 'working'} color={a.state === 'waiting' ? 'inactive' : undefined}>
+            {` ${R.titleOf(a)}`}
+          </Text>
+        </Text>,
+        <Text color="inactive">{R.timeText(a, agents.now)}</Text>,
+      )}
+      {R.detailLines(a).map((line, i) => detail(`ad-${a.id}-${i}`, line, 'inactive'))}
     </Box>
   ))
 
-  const commitRows = commits.map(c =>
-    row(
-      `c-${c.hash}`,
-      <Text color="inactive" wrap="truncate-end">{`● ${c.hash} ${c.subject}`}</Text>,
-      stat(V.totalsOf(c.files), true),
-    ),
-  )
-
   const fileRows = current.map(f => {
-    const { name, dir } = splitPath(f.path)
+    const name = splitPath(f.path).name
     const letter = V.statusLetter(f)
-    const editorId = files.editedBy.get(f.path)
-    const place = [dir, editorId ? agents.taskOf(editorId) : ''].filter(Boolean).join(', ')
-    const reason = reasons.reasons.get(f.path)
+    const { reason, place, isExplaining } = noteOf(view, f.path)
     return (
       <Box key={`f-${f.path}`} flexDirection="column">
         {row(
@@ -116,35 +132,23 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
             ) : (
               <Text bold>{name}</Text>
             )}
-            {f.otherSessions ? <Text color="yellow">{`  ${V.CONFLICT_LABEL}`}</Text> : <Text />}
+            {f.otherSessions ? <Text color="warning">{`  ${V.CONFLICT_LABEL}`}</Text> : <Text />}
           </Text>,
           stat(f),
         )}
-        {reason ? (
-          <Box paddingLeft={2}>
-            <Text wrap="truncate-end">{reason}</Text>
-          </Box>
-        ) : reasons.explaining.has(f.path) ? (
-          <Box paddingLeft={2}>
-            <Text color="inactive" italic>
-              변경 이유 정리 중…
-            </Text>
-          </Box>
-        ) : (
-          <Text />
-        )}
-        {place ? (
-          <Box paddingLeft={2}>
-            <Text color="inactive" wrap="truncate-middle">
-              {place}
-            </Text>
-          </Box>
-        ) : (
-          <Text />
-        )}
+        {reason ? detail(`fn-${f.path}`, reason, isExplaining ? 'inactive' : undefined, isExplaining) : <Text />}
+        {place ? detail(`fp-${f.path}`, place, 'inactive') : <Text />}
       </Box>
     )
   })
+
+  const commitRows = commits.map(c =>
+    row(
+      `c-${c.hash}`,
+      <Text color="inactive" wrap="truncate-end">{`● ${c.hash} ${c.subject}`}</Text>,
+      stat(V.totalsOf(c.files), true),
+    ),
+  )
 
   return (
     <Box flexDirection="column" paddingX={1} backgroundColor={C.PANE_BACKGROUND ?? undefined}>
@@ -159,19 +163,18 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
       <Text key="divider" color="inactive">
         {'─'.repeat(Math.max(1, width - 2))}
       </Text>
-      {label('l-agents', '에이전트')}
+      {section('s-agents', '에이전트', agents.agents.length)}
       {agentRows}
-      {label('l-files', '작업 파일')}
-      {commits.length > 0 ? label('l-commits', '커밋') : <Text key="nc" />}
-      {commitRows}
-      {commits.length > 0 ? label('l-after', '커밋 이후') : <Text key="na" />}
+      {section('s-files', '변경 파일', current.length)}
       {current.length === 0 ? (
         <Text key="empty" color="inactive">
-          편집한 파일 없음
+          없음
         </Text>
       ) : (
         fileRows
       )}
+      {commits.length > 0 ? section('s-commits', '커밋', commits.length) : <Text key="nc" />}
+      {commitRows}
     </Box>
   )
 }

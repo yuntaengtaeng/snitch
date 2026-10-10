@@ -34,28 +34,61 @@ test('withListed: $.agent.list() 상태로 아는 에이전트만 맞춘다', ()
   expect(synced.some(a => a.id === 'zz')).toBe(false)
 })
 
-test('visibleAgents: 메인, 진행 중, 최근 끝난 순서로 끝난 것은 개수 제한', () => {
+test('visibleAgents: 메인, 진행 중, 최근 끝난 순서로 끝난 지 오래된 것은 숨긴다', () => {
   let roster = [R.mainAgent(0)]
-  for (const [i, id] of ['d1', 'd2', 'd3'].entries()) {
+  for (const [id, endedAt] of [['old', 0], ['d1', 50_000], ['d2', 55_000]] as const) {
     roster = R.withSpawned(roster, { ...spawn, id }, 0)
-    roster = R.withState(roster, id, 'done', i * 1_000)
+    roster = R.withState(roster, id, 'done', endedAt)
   }
   roster = R.withSpawned(roster, { ...spawn, id: 'w1' }, 0)
 
-  expect(R.visibleAgents(roster, 2).map(a => a.id)).toEqual(['main', 'w1', 'd3', 'd2'])
+  expect(R.visibleAgents(roster, 70_000, 60_000).map(a => a.id)).toEqual(['main', 'w1', 'd2', 'd1'])
+  expect(R.withoutExpired(roster, 70_000, 60_000).some(a => a.id === 'old')).toBe(false)
 })
 
-test('activityOf: 파일 경로는 이름만, 명령은 첫 줄만', () => {
+test('needsTick: 메인만 대기 중이면 다시 그릴 필요 없음', () => {
+  const idle = [R.mainAgent(0)]
+
+  expect(R.needsTick(idle)).toBe(false)
+  expect(R.needsTick(R.withState(idle, 'main', 'working', 1))).toBe(true)
+  expect(R.needsTick(R.withState(R.withSpawned(idle, spawn, 0), 'a1', 'done', 1))).toBe(true)
+})
+
+test('activityOf: 파일 툴은 툴과 파일 이름, 명령은 경로를 줄인 첫 줄', () => {
   expect(R.activityOf('Write', { file_path: 'C:\\r\\notes\\a.md' })).toBe('Write a.md')
-  expect(R.activityOf('Bash', { command: 'npm test\nnpm run lint' })).toBe('Bash npm test')
+  expect(R.activityOf('Bash', { command: 'cat /c/Users/dbsxo/snitch-test/notes/a.md\nls' })).toBe('cat a.md')
+  expect(R.activityOf('Bash', { command: 'npm test' })).toBe('npm test')
   expect(R.activityOf('TodoWrite', {})).toBe('TodoWrite')
 })
 
-test('statusLine: 상태별 문구에 가운뎃점과 화살표가 없다', () => {
-  const working = { ...R.mainAgent(0), state: 'working' as const, activity: 'Write a.md' }
+test('shortenPaths: Windows 와 POSIX 경로를 파일 이름으로 줄인다', () => {
+  expect(R.shortenPaths('type C:\\r\\notes\\b.md')).toBe('type b.md')
+  expect(R.shortenPaths('diff /a/x.ts /b/y.ts')).toBe('diff x.ts y.ts')
+  expect(R.shortenPaths('git status')).toBe('git status')
+})
 
-  expect(R.statusLine(working, 72_000)).toBe('작업 중, 1분 12초, Write a.md')
-  expect(R.statusLine({ ...working, state: 'done' }, 3_000)).toBe('완료, 방금')
-  expect(R.statusLine({ ...working, state: 'done' }, 30_000)).toBe('완료, 30초 전')
-  expect(R.statusLine({ ...working, state: 'waiting' }, 30_000)).toBe('대기')
+test('agentsText: 상태 아이콘, 제목, 시간, 작업 중 활동', () => {
+  let roster = R.withSpawned([R.mainAgent(0)], spawn, 0)
+  roster = R.withActivity(roster, 'a1', 'Write a.md')
+
+  expect(R.agentsText(roster, 7_000)).toBe('에이전트 2\n  ○ main\n  ● 할 일 목록 a.md 작성  7초\n    Write a.md')
+})
+
+test('timeText: 작업 중은 경과 시간, 끝나면 걸린 시간, 대기는 빈 문자열', () => {
+  let roster = R.withSpawned([R.mainAgent(0)], spawn, 1_000)
+  const working = roster.find(a => a.id === 'a1')!
+  expect(R.timeText(working, 73_000)).toBe('1분 12초')
+
+  roster = R.withState(roster, 'a1', 'done', 13_000)
+  expect(R.timeText(roster.find(a => a.id === 'a1')!, 90_000)).toBe('12초')
+  expect(R.timeText(R.mainAgent(0), 90_000)).toBe('')
+})
+
+test('titleOf 와 detailLines: 제목은 작업 이름, 아래 줄은 작업 중일 때 활동만', () => {
+  const agent = { ...R.withSpawned([], spawn, 0)[0]!, activity: 'Write a.md' }
+
+  expect(R.titleOf(agent)).toBe('할 일 목록 a.md 작성')
+  expect(R.titleOf(R.mainAgent(0))).toBe('main')
+  expect(R.detailLines(agent)).toEqual(['Write a.md'])
+  expect(R.detailLines({ ...agent, state: 'done' })).toEqual([])
 })

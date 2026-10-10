@@ -13,6 +13,7 @@ export const ENABLE = {
 export const PANE_ID = 'k-work-files'
 export const PANE_TITLE = 'snitch'
 export const CHANGES_COMMAND = 'changes'
+export const DASHBOARD_COMMAND = 'snitch'
 
 /** 작업 파일로 추적할 편집 툴 */
 export const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] as const
@@ -23,11 +24,14 @@ export const PANE_AUTO_OPEN = true
 /** 패널을 열 때 요청하는 최대 높이(줄) */
 export const PANE_MAX_ROWS = 30
 
-/** 대시보드에 남겨 둘 끝난 서브에이전트 수 */
-export const AGENT_MAX_FINISHED = 5
+/** 끝난 서브에이전트를 대시보드에 남겨 두는 시간(초) */
+export const AGENT_KEEP_FINISHED_SEC = 60
 
-/** 작업 중인 에이전트가 있을 때 대시보드를 다시 그리는 주기(초) */
+/** 작업 중이거나 막 끝난 에이전트가 있을 때 대시보드를 다시 그리는 주기(초) */
 export const AGENT_TICK_SEC = 5
+
+/** 자동으로 연 패널을 다시 그리는 시점(ms), 두 번째 시점에 보이지 않으면 안내 */
+export const PANE_SETTLE_MS = [500, 2000] as const
 
 /** 사이드바 패널의 기본 너비(칸) */
 export const PANE_DOCK_COLUMNS = 56
@@ -51,7 +55,7 @@ export const REASON_MODEL = 'haiku'
 export const REASON_DIFF_CHARS = 12_000
 
 /** 변경 이유 한 줄의 최대 글자 수 */
-export const REASON_MAX_CHARS = 40
+export const REASON_MAX_CHARS = 30
 
 /** 변경 이유 요약 요청의 제한 시간(초) */
 export const REASON_TIMEOUT_SEC = 30
