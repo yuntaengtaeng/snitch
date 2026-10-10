@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { limitGauge } from './text'
+import { limitGauge, statusText } from './text'
 
 test('limitGauge: 사용률을 남은 한도 막대와 단계로 바꾼다', () => {
   expect(limitGauge({ kind: 'five_hour', percentUsed: 62 }, 6)).toEqual({
@@ -16,4 +16,18 @@ test('limitGauge: 사용률을 남은 한도 막대와 단계로 바꾼다', () 
 test('limitGauge: 범위를 벗어난 사용률은 0~100 으로 자른다', () => {
   expect(limitGauge({ kind: 'five_hour', percentUsed: 130 }, 4)).toMatchObject({ remaining: 0, bar: '▱▱▱▱' })
   expect(limitGauge({ kind: 'other', percentUsed: -5 }, 4)).toMatchObject({ label: 'other', remaining: 100, bar: '▰▰▰▰' })
+})
+
+test('statusText: 모델과 effort, 남은 한도만 보여 준다', () => {
+  const text = statusText({
+    model: 'claude-opus-5-5',
+    effort: 'high',
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 62 },
+      { kind: 'seven_day', percentUsed: 31 },
+    ],
+  })
+
+  expect(text).toBe('Opus 5.5 high  |  남은 한도 5h 38%, 7d 69%')
+  expect(statusText({ model: null, rateLimits: [] })).toBe('')
 })

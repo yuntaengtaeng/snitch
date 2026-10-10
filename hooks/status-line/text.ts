@@ -18,26 +18,24 @@ export function shortModelName(id: string): string {
   return `${family} ${version}${m[4] ?? ''}`
 }
 
-/** 상태줄 문자열 */
+/** 사용률의 남은 비율(0~100, 정수) */
+export function remainingPercent(limit: RateLimit): number {
+  return Math.min(100, Math.max(0, Math.round(100 - limit.percentUsed)))
+}
+
+/** 상태줄 문자열, 모델과 effort, 남은 한도 */
 export function statusText(input: {
   model?: string | null
   effort?: string | null
-  rateLimits: RateLimit[]
-  editedFiles: number
-  commands: number
+  rateLimits: readonly RateLimit[]
 }): string {
   const parts: string[] = []
-
-  if (input.model) {
-    parts.push(input.effort ? `${shortModelName(input.model)} · ${input.effort}` : shortModelName(input.model))
-  }
+  if (input.model) parts.push([shortModelName(input.model), input.effort].filter(Boolean).join(' '))
 
   const limits = input.rateLimits
-    .map(r => `${LIMIT_LABEL[r.kind] ?? r.kind} ${Math.round(r.percentUsed)}%`)
-    .join(' · ')
-  if (limits) parts.push(`한도 ${limits}`)
-
-  parts.push(`세션 편집 ${input.editedFiles}파일 · 명령 ${input.commands}회`)
+    .map(r => `${LIMIT_LABEL[r.kind] ?? r.kind} ${remainingPercent(r)}%`)
+    .join(', ')
+  if (limits) parts.push(`남은 한도 ${limits}`)
 
   return parts.join('  |  ')
 }
@@ -54,7 +52,7 @@ export type LimitGauge = {
 
 /** 사용률을 남은 한도 막대로 바꾼 값, segments 는 막대 칸 수 */
 export function limitGauge(limit: RateLimit, segments: number): LimitGauge {
-  const remaining = Math.min(100, Math.max(0, Math.round(100 - limit.percentUsed)))
+  const remaining = remainingPercent(limit)
   const filled = Math.round((remaining / 100) * segments)
   return {
     label: LIMIT_LABEL[limit.kind] ?? limit.kind,

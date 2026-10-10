@@ -98,22 +98,21 @@ function isFinished(a: AgentEntry): boolean {
   return a.state === 'done' || a.state === 'error'
 }
 
-/** 끝난 지 keepMs 가 지난 서브에이전트를 뺀 목록 */
-export function withoutExpired(roster: AgentEntry[], now: number, keepMs: number): AgentEntry[] {
-  return roster.filter(a => a.id === MAIN_ID || !isFinished(a) || now - a.since < keepMs)
+/** 끝난 서브에이전트를 뺀 목록, 새 요청을 시작할 때 사용 */
+export function withoutFinished(roster: AgentEntry[]): AgentEntry[] {
+  return roster.filter(a => a.id === MAIN_ID || !isFinished(a))
 }
 
-/** 상태 확인이 필요한 에이전트가 있는지 여부, 작업 중이거나 아직 사라지지 않은 끝난 에이전트 */
+/** 상태 확인이 필요한 에이전트가 있는지 여부, 작업 중인 에이전트가 있을 때 */
 export function needsTick(roster: AgentEntry[]): boolean {
-  return roster.some(a => a.state === 'working' || (a.id !== MAIN_ID && isFinished(a)))
+  return roster.some(a => a.state === 'working')
 }
 
-/** 표시 순서의 에이전트 목록, 메인 대화, 진행 중, 끝난 지 keepMs 안 된 에이전트 순 */
-export function visibleAgents(roster: AgentEntry[], now: number, keepMs: number): AgentEntry[] {
-  const shown = withoutExpired(roster, now, keepMs)
-  const main = shown.filter(a => a.id === MAIN_ID)
-  const active = shown.filter(a => a.id !== MAIN_ID && !isFinished(a))
-  const finished = shown.filter(a => a.id !== MAIN_ID && isFinished(a)).sort((a, b) => b.since - a.since)
+/** 표시 순서의 에이전트 목록, 메인 대화, 진행 중, 최근에 끝난 순 */
+export function visibleAgents(roster: AgentEntry[]): AgentEntry[] {
+  const main = roster.filter(a => a.id === MAIN_ID)
+  const active = roster.filter(a => a.id !== MAIN_ID && !isFinished(a))
+  const finished = roster.filter(a => a.id !== MAIN_ID && isFinished(a)).sort((a, b) => b.since - a.since)
   return [...main, ...active, ...finished]
 }
 
@@ -173,4 +172,9 @@ export function agentsText(agents: AgentEntry[], now: number): string {
 /** 에이전트 구역의 예상 줄 수 */
 export function agentsRows(agents: AgentEntry[]): number {
   return 2 + agents.reduce((n, a) => n + 1 + detailLines(a).length, 0)
+}
+
+/** 메인 대화 말고 표시할 서브에이전트가 있는지 여부 */
+export function hasSubagents(agents: AgentEntry[]): boolean {
+  return agents.some(a => a.id !== MAIN_ID)
 }

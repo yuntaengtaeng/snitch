@@ -34,24 +34,33 @@ test('withListed: $.agent.list() 상태로 아는 에이전트만 맞춘다', ()
   expect(synced.some(a => a.id === 'zz')).toBe(false)
 })
 
-test('visibleAgents: 메인, 진행 중, 최근 끝난 순서로 끝난 지 오래된 것은 숨긴다', () => {
+test('visibleAgents: 메인, 진행 중, 최근에 끝난 순서', () => {
   let roster = [R.mainAgent(0)]
-  for (const [id, endedAt] of [['old', 0], ['d1', 50_000], ['d2', 55_000]] as const) {
+  for (const [id, endedAt] of [['d1', 50_000], ['d2', 55_000]] as const) {
     roster = R.withSpawned(roster, { ...spawn, id }, 0)
     roster = R.withState(roster, id, 'done', endedAt)
   }
   roster = R.withSpawned(roster, { ...spawn, id: 'w1' }, 0)
 
-  expect(R.visibleAgents(roster, 70_000, 60_000).map(a => a.id)).toEqual(['main', 'w1', 'd2', 'd1'])
-  expect(R.withoutExpired(roster, 70_000, 60_000).some(a => a.id === 'old')).toBe(false)
+  expect(R.visibleAgents(roster).map(a => a.id)).toEqual(['main', 'w1', 'd2', 'd1'])
 })
 
-test('needsTick: 메인만 대기 중이면 다시 그릴 필요 없음', () => {
+test('withoutFinished: 새 요청 때 끝난 서브에이전트만 빼고 진행 중은 남긴다', () => {
+  let roster = R.withSpawned([R.mainAgent(0)], spawn, 0)
+  roster = R.withState(roster, 'a1', 'done', 5_000)
+  roster = R.withSpawned(roster, { ...spawn, id: 'w1' }, 6_000)
+  roster = R.withSpawned(roster, { ...spawn, id: 'e1' }, 6_000)
+  roster = R.withState(roster, 'e1', 'error', 7_000)
+
+  expect(R.withoutFinished(roster).map(a => a.id)).toEqual(['main', 'w1'])
+})
+
+test('needsTick: 작업 중인 에이전트가 있을 때만', () => {
   const idle = [R.mainAgent(0)]
 
   expect(R.needsTick(idle)).toBe(false)
   expect(R.needsTick(R.withState(idle, 'main', 'working', 1))).toBe(true)
-  expect(R.needsTick(R.withState(R.withSpawned(idle, spawn, 0), 'a1', 'done', 1))).toBe(true)
+  expect(R.needsTick(R.withState(R.withSpawned(idle, spawn, 0), 'a1', 'done', 1))).toBe(false)
 })
 
 test('activityOf: 파일 툴은 툴과 파일 이름, 명령은 경로를 줄인 첫 줄', () => {
@@ -91,4 +100,9 @@ test('titleOf 와 detailLines: 제목은 작업 이름, 아래 줄은 작업 중
   expect(R.titleOf(R.mainAgent(0))).toBe('main')
   expect(R.detailLines(agent)).toEqual(['Write a.md'])
   expect(R.detailLines({ ...agent, state: 'done' })).toEqual([])
+})
+
+test('hasSubagents: 메인 대화만 있으면 false', () => {
+  expect(R.hasSubagents([R.mainAgent(0)])).toBe(false)
+  expect(R.hasSubagents(R.withSpawned([R.mainAgent(0)], spawn, 0))).toBe(true)
 })

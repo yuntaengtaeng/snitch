@@ -50,12 +50,18 @@ function noteOf(view: DashboardView, path: string): V.FileNote & { isExplaining:
   }
 }
 
-/** /changes text 와 좁은 화면용 텍스트 버전 */
+/** 에이전트 구역을 보여 줄지 여부, 서브에이전트가 있을 때만 */
+function showsAgents(view: DashboardView): boolean {
+  return R.hasSubagents(view.agents.agents)
+}
+
+/** /snitch text 와 좁은 화면용 텍스트 버전 */
 export function dashboardText(view: DashboardView): string {
-  const agents = R.agentsText(view.agents.agents, view.agents.now)
-  const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
   const limits = gaugesOf(view).map(g => `${g.label} ${g.remaining}% 남음`).join(', ')
-  return `snitch${limits ? `  ${limits}` : ''}\n\n${agents}\n\n${files}`
+  const header = `snitch${limits ? `  ${limits}` : ''}`
+  const agents = showsAgents(view) ? R.agentsText(view.agents.agents, view.agents.now) : ''
+  const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
+  return [header, agents, files].filter(Boolean).join('\n\n')
 }
 
 /** 패널을 열 때 요청할 줄 수 */
@@ -64,7 +70,8 @@ export function dashboardRows(view: DashboardView): number {
     const { reason, place } = noteOf(view, f.path)
     return n + (reason ? 1 : 0) + (place ? 1 : 0)
   }, 0)
-  const rows = 2 + R.agentsRows(view.agents.agents) + V.filesRows(view.files.commits, view.files.current, noteLines)
+  const agentRows = showsAgents(view) ? R.agentsRows(view.agents.agents) : 0
+  const rows = 2 + agentRows + V.filesRows(view.files.commits, view.files.current, noteLines)
   return Math.min(rows, C.PANE_MAX_ROWS)
 }
 
@@ -152,7 +159,7 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
           <Text wrap="truncate-end">
             <Text color={letter === 'A' ? 'success' : 'inactive'}>{letter}</Text>
             <Text> </Text>
-            {repoRoot ? (
+            {repoRoot && C.PANE_FILE_LINKS ? (
               <Link href={fileUrl(repoRoot, f.path)}>
                 <Text bold>{name}</Text>
               </Link>
@@ -195,8 +202,8 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
       <Text key="divider" color="inactive">
         {'─'.repeat(Math.max(1, width - 2))}
       </Text>
-      {section('s-agents', '에이전트', agents.agents.length)}
-      {agentRows}
+      {showsAgents(view) ? section('s-agents', '에이전트', agents.agents.length) : <Text key="na" />}
+      {showsAgents(view) ? agentRows : <Text key="nar" />}
       {section('s-files', '변경 파일', current.length, current.length > 0 ? stat(all) : undefined)}
       {current.length === 0 ? (
         <Text key="empty" color="inactive">

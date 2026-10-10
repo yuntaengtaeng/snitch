@@ -1,8 +1,5 @@
-import * as C from '../config'
 import type { Host } from '../host'
 import * as R from './roster'
-
-const KEEP_MS = C.AGENT_KEEP_FINISHED_SEC * 1000
 
 export type AgentsView = {
   agents: R.AgentEntry[]
@@ -31,8 +28,10 @@ export function createAgents(deps: { getHost: () => Host | null; onChange: () =>
       tasks.clear()
     },
 
-    async turnStarted() {
+    /** 메인 대화 턴 시작, 사용자가 입력한 새 요청이면 끝난 서브에이전트 정리 */
+    async turnStarted(isNewRequest: boolean) {
       await syncClock()
+      if (isNewRequest) roster = R.withoutFinished(roster)
       roster = R.withState(roster, R.MAIN_ID, 'working', now)
       deps.onChange()
     },
@@ -57,18 +56,17 @@ export function createAgents(deps: { getHost: () => Host | null; onChange: () =>
       deps.onChange()
     },
 
-    /** $.agent.list() 로 상태를 맞추고 경과 시간 갱신, 끝난 지 오래된 서브에이전트 제거 */
+    /** 작업 중인 에이전트가 있으면 $.agent.list() 로 상태를 맞추고 경과 시간 갱신 */
     async tick() {
       const host = deps.getHost()
       if (!host || !R.needsTick(roster)) return
       await syncClock()
       roster = R.withListed(roster, await host.listAgents().catch(() => []), now)
-      roster = R.withoutExpired(roster, now, KEEP_MS)
       deps.onChange()
     },
 
     view: (): AgentsView => ({
-      agents: R.visibleAgents(roster, now, KEEP_MS),
+      agents: R.visibleAgents(roster),
       now,
       taskOf: id => tasks.get(id) ?? '',
     }),

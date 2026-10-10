@@ -25,8 +25,6 @@ export function createWorkFiles(deps: {
   let sid = ''
   let repoRoot: string | null = null
   let head: string | null = null
-  /** 레포 밖 파일까지 포함한 세션 편집 파일 (절대 경로) */
-  const editedAll = new Set<string>()
   /** 마지막 커밋 이후 편집한 파일 (레포 기준 경로, 편집 순서) */
   const tracked: string[] = []
   const editedBy = new Map<string, string>()
@@ -36,7 +34,6 @@ export function createWorkFiles(deps: {
   let isRefreshQueued = false
 
   function clearState() {
-    editedAll.clear()
     tracked.length = 0
     editedBy.clear()
     commits = []
@@ -195,7 +192,6 @@ export function createWorkFiles(deps: {
     /** 편집한 파일 추가 후 레포 기준 경로 반환, 레포 밖이면 null */
     track(path: string, agentId: string): string | null {
       const abs = P.absolutePath(path, cwd, isWindows)
-      editedAll.add(abs)
       const rel = repoRoot ? P.relativeTo(repoRoot, abs, isWindows) : null
       if (rel === null) return null
       if (!tracked.includes(rel)) tracked.push(rel)
@@ -223,7 +219,6 @@ export function createWorkFiles(deps: {
       return text === null ? null : `(새 파일)\n${text}`
     },
 
-    editedCount: () => editedAll.size,
     hasTracked: () => tracked.length > 0,
     view: (): WorkFilesView => ({ repoRoot, commits, current, editedBy }),
   }

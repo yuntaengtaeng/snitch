@@ -8,14 +8,12 @@ export type Host = {
   storeKeys: () => Promise<string[]>
   now: () => Promise<number>
   status: (text: string | undefined) => void
-  toast: (text: string) => void
   invalidate: () => void
   /** 패널 열기, 사용자가 열지 않은 패널은 좁은 화면이면 배치 대기 */
   openPane: (rows: number) => Promise<{ isPlaced: boolean }>
   closePane: () => Promise<void>
   paneState: () => Promise<{ isOpen: boolean; isPlaced: boolean; isShown: boolean }>
   every: (ms: number, fn: () => void) => { cancel: () => void }
-  after: (ms: number, fn: () => void) => { cancel: () => void }
   /** REASON_MODEL 의 답 텍스트, 답이 없으면 null */
   complete: (prompt: string, system: string) => Promise<string | null>
   /** 이 세션의 서브에이전트 id 와 상태 */

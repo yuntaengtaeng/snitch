@@ -21,7 +21,6 @@ function createHost($: EngineInterface): Host {
     storeKeys: () => $.store.keys(),
     now: () => $.clock.now(),
     status: text => $.ui.status(text),
-    toast: text => $.ui.toast(text),
     invalidate: () => $.ui.invalidate('ui.render'),
     openPane: rows =>
       $.ui.open({
@@ -41,7 +40,6 @@ function createHost($: EngineInterface): Host {
       }
     },
     every: (ms, fn) => $.clock.every(ms, fn),
-    after: (ms, fn) => $.clock.after(ms, fn),
     complete: async (prompt, system) => {
       const r = await $.model.complete({
         model: C.REASON_MODEL,
@@ -75,7 +73,7 @@ export function register(on: On) {
   })
   const reasons = createReasons({ getHost, changeOf: rel => workFiles.changeOf(rel), onChange: redraw })
   const agents = createAgents({ getHost, onChange: redraw })
-  const statusLine = createStatusLine({ getHost, editedCount: workFiles.editedCount })
+  const statusLine = createStatusLine({ getHost })
 
   const dashboard = (): DashboardView => ({
     agents: agents.view(),
@@ -122,14 +120,12 @@ export function register(on: On) {
     return next(e)
   })
 
-  /** /clear, /resume 시 작업량, 작업 파일, 변경 이유, 에이전트 초기화 */
+  /** /clear, /resume 시 작업 파일, 변경 이유, 에이전트 초기화 */
   on('command.run', { command: ['clear', 'resume'] }, async ($, e, next) => {
     const r = await next(e)
     await workFiles.clear()
     reasons.clear()
     await agents.clear()
-    statusLine.clear()
-    statusLine.update()
     redraw()
     return r
   })
@@ -144,7 +140,7 @@ export function register(on: On) {
 
   on('turn.start', async ($, e, next) => {
     reasons.noteRequest(e.text)
-    await agents.turnStarted()
+    await agents.turnStarted(e.text.trim() !== '')
     return next(e)
   })
 
@@ -169,7 +165,7 @@ export function register(on: On) {
     return next(e)
   })
 
-  /** 툴 호출마다 에이전트 활동 기록, 바뀐 파일 추적, Bash 명령 집계와 커밋 감지 */
+  /** 툴 호출마다 에이전트 활동 기록, 바뀐 파일 추적, Bash 뒤 커밋 감지 */
   on('tool.call', async ($, e, next) => {
     const r = await next(e)
     if (r.deny !== undefined) return r
@@ -183,11 +179,9 @@ export function register(on: On) {
     }
 
     if (e.tool === 'Bash') {
-      statusLine.commandRan()
       const command = typeof input['command'] === 'string' ? input['command'] : ''
       void workFiles.afterBash(command).catch(() => undefined)
     }
-    statusLine.update()
     return r
   })
 
@@ -224,20 +218,6 @@ export function register(on: On) {
     return {}
   }).catch(() => ({ text: '대시보드 불러오기 실패, 잠시 후 다시 시도' }))
 
-  /** 자동으로 연 패널을 화면 배치 뒤에 다시 그리고, 그래도 안 보이면 /snitch 안내 */
-  function settleAutoOpenedPane() {
-    host?.after(C.PANE_SETTLE_MS[0], redraw)
-    host?.after(C.PANE_SETTLE_MS[1], () => {
-      redraw()
-      void host
-        ?.paneState()
-        .then(pane => {
-          if (pane.isOpen && !(pane.isPlaced && pane.isShown)) host?.toast('대시보드 패널 배치 대기 중, /snitch 로 열기')
-        })
-        .catch(() => undefined)
-    })
-  }
-
   /** 전체화면 레이아웃이면 세션당 한 번 패널 자동 열기 */
   on('ui.render', { component: 'PromptHint' }, ($, e, next) => {
     const canAutoOpen =
@@ -245,12 +225,9 @@ export function register(on: On) {
     if (canAutoOpen && e.viewport?.isFullscreen === true) {
       hasAutoOpened = true
       isPaneOpen = true
-      void host
-        ?.openPane(dashboardRows(dashboard()))
-        .then(() => settleAutoOpenedPane())
-        .catch(() => {
-          isPaneOpen = false
-        })
+      void host?.openPane(dashboardRows(dashboard())).catch(() => {
+        isPaneOpen = false
+      })
     }
     return next(e)
   })

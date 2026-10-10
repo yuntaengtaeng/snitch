@@ -24,17 +24,14 @@ export const PANE_AUTO_OPEN = true
 /** 패널을 열 때 요청하는 최대 높이(줄) */
 export const PANE_MAX_ROWS = 30
 
-/** 끝난 서브에이전트를 대시보드에 남겨 두는 시간(초) */
-export const AGENT_KEEP_FINISHED_SEC = 60
-
-/** 작업 중이거나 막 끝난 에이전트가 있을 때 대시보드를 다시 그리는 주기(초) */
+/** 작업 중인 에이전트가 있을 때 경과 시간과 상태를 갱신하는 주기(초) */
 export const AGENT_TICK_SEC = 5
-
-/** 자동으로 연 패널을 다시 그리는 시점(ms), 두 번째 시점에 보이지 않으면 안내 */
-export const PANE_SETTLE_MS = [500, 2000] as const
 
 /** 대시보드 제목 줄의 한도 막대 칸 수 */
 export const LIMIT_BAR_SEGMENTS = 6
+
+/** 파일 이름을 file:// 링크로 표시할지 여부, 링크를 지원하지 않는 터미널에서는 주소가 그대로 보임 */
+export const PANE_FILE_LINKS = false
 
 /** 사이드바 패널의 기본 너비(칸) */
 export const PANE_DOCK_COLUMNS = 56
