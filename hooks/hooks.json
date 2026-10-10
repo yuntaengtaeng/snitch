@@ -1,0 +1,6 @@
+{
+  "description": "status-line: turn.step, session.measure, tool.call 로 상태줄(모델·effort, 요금제 한도, 오늘 누적 비용, 세션 작업량)을 갱신한다. work-files: Claude가 편집한 파일을 git 기준 줄 수와 함께 추적하고, Claude가 커밋하면 커밋 단위로 쌓아 /changes 패널에 보여준다. 전체화면 레이아웃이면 세션당 한 번 패널을 우측에 자동으로 띄운다.",
+  "modules": [
+    "./register.tsx"
+  ]
+}

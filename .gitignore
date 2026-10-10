@@ -1,0 +1,7 @@
+# Claude Code가 mod를 로드할 때 생성하는 타입 파일
+.claude-plugin/types/
+
+*.zip
+node_modules/
+.DS_Store
+Thumbs.db

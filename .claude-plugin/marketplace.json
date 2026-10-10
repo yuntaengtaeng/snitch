@@ -1,0 +1,12 @@
+{
+  "name": "snitch",
+  "owner": { "name": "yuntaeko" },
+  "description": "Claude가 한 일을 전부 일러바치는 Claude Code mod",
+  "plugins": [
+    {
+      "name": "snitch",
+      "source": "./",
+      "description": "상태줄(한도·오늘 비용·세션 작업량)과 작업 파일 패널(/changes)"
+    }
+  ]
+}
