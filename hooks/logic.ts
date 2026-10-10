@@ -1,19 +1,15 @@
-/**
- * $ 를 쓰지 않는 순수 함수들. Claude Code 없이도 테스트할 수 있다.
- */
-
-// ───────────── git ─────────────
+/** Claude Code API 에 의존하지 않는 순수 함수 */
 
 export type FileStat = {
   /** 레포 루트 기준 경로 */
   path: string
-  /** 추가 줄 수 (바이너리면 null) */
+  /** 추가 줄 수. 바이너리면 null */
   added: number | null
-  /** 삭제 줄 수 (바이너리면 null) */
+  /** 삭제 줄 수. 바이너리면 null */
   deleted: number | null
-  /** git 이 아직 추적하지 않는 새 파일 */
+  /** git 이 추적하지 않는 새 파일 여부 */
   isNew?: boolean
-  /** 다른 세션도 최근에 이 파일을 수정했으면, 그 세션 수 */
+  /** 같은 파일을 최근 수정한 다른 세션 수 */
   otherSessions?: number
 }
 
@@ -23,10 +19,7 @@ export type CommitEntry = {
   files: FileStat[]
 }
 
-/**
- * `git diff --numstat --no-renames` 출력 해석.
- * 형식: "<추가>\t<삭제>\t<경로>", 바이너리는 "-\t-\t<경로>"
- */
+/** `git diff --numstat` 출력을 파일별 줄 수로 변환 */
 export function parseNumstat(stdout: string): FileStat[] {
   const stats: FileStat[] = []
   for (const line of stdout.split('\n')) {
@@ -44,7 +37,7 @@ export function parseNumstat(stdout: string): FileStat[] {
   return stats
 }
 
-/** `git log -1 --format=%h%x00%s` 출력 해석 */
+/** `git log -1 --format=%h%x00%s` 출력을 해시와 제목으로 변환 */
 export function parseCommitHeader(stdout: string): { hash: string; subject: string } | null {
   const line = stdout.replace(/\n$/, '')
   const sep = line.indexOf('\u0000')
@@ -52,25 +45,19 @@ export function parseCommitHeader(stdout: string): { hash: string; subject: stri
   return { hash: line.slice(0, sep), subject: line.slice(sep + 1) }
 }
 
-/**
- * Bash 명령이 git commit 을 포함하는지.
- * `git commit`, `git -C dir commit`, `git add . && git commit -m ...` 등을 잡는다.
- * 실제로 커밋됐는지는 HEAD 변화로 다시 확인하므로 여기서는 넓게 잡아도 된다.
- */
+/** 셸 명령에 git commit 이 들어 있는지 여부 */
 export function mentionsGitCommit(command: string): boolean {
   return /\bgit\b(\s+(-[cC]\s+\S+|--?[\w-]+(=\S+)?))*\s+commit\b/.test(command)
 }
 
-/** Windows 경로인지 (C:\..., C:/..., \\server\share) */
+/** Windows 경로(C:\, C:/, \\server) 여부 */
 export function isWindowsPath(p: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
 }
 
 /**
- * 경로 비교용 정규화.
- * - 구분자를 / 로 통일 (Windows 툴 경로는 C:\..., git 은 C:/... 를 돌려준다)
- * - 드라이브 문자를 대문자로 (c:/ 와 C:/ 를 같게)
- * - Windows 에서 Git Bash 형식(/c/Users/...)이 오면 C:/Users/... 로
+ * 비교용 경로 정규화: 구분자는 /, 끝의 / 제거.
+ * Windows 에서는 드라이브 문자를 대문자로, /c/... 형식을 C:/... 로 변환
  */
 export function normalizePath(p: string, isWindows: boolean): string {
   let n = p.replace(/\\/g, '/')
@@ -82,15 +69,11 @@ export function normalizePath(p: string, isWindows: boolean): string {
   return n.replace(/\/+$/, '') || '/'
 }
 
-/** 절대 경로인지 (POSIX, Windows 모두) */
 export function isAbsolutePath(p: string): boolean {
   return p.startsWith('/') || isWindowsPath(p)
 }
 
-/**
- * 절대 경로를 레포 루트 기준 상대 경로(git 과 같은 / 구분)로. 레포 밖이면 null.
- * Windows 는 파일 시스템이 대소문자를 구분하지 않으므로 대소문자 무시하고 비교한다.
- */
+/** 절대 경로를 레포 루트 기준 경로로 변환. 레포 밖이면 null. Windows 는 대소문자 무시 */
 export function relativeTo(root: string, absPath: string, isWindows = false): string | null {
   const r = normalizePath(root, isWindows)
   const a = normalizePath(absPath, isWindows)
@@ -101,7 +84,7 @@ export function relativeTo(root: string, absPath: string, isWindows = false): st
   return matches ? a.slice(base.length) : null
 }
 
-/** 모델 ID 를 짧게: claude-opus-5-5 → Opus 5.5, claude-sonnet-4-6-20260101 → Sonnet 4.6 */
+/** 모델 ID 를 표시용 이름으로 변환 (claude-opus-5-5 → Opus 5.5) */
 export function shortModelName(id: string): string {
   const core = id.replace(/^claude-/, '').replace(/-\d{8}$/, '')
   const m = /^([a-z]+)-(\d+)(?:-(\d+))?(.*)$/.exec(core)
@@ -111,18 +94,13 @@ export function shortModelName(id: string): string {
   return `${family} ${version}${m[4] ?? ''}`
 }
 
-// ───────────── 패널 내용 ─────────────
-
-/** 경로를 파일명과 폴더로 나눈다 */
+/** 경로를 파일 이름과 폴더로 분리 */
 export function splitPath(path: string): { name: string; dir: string } {
   const i = path.lastIndexOf('/')
   return i < 0 ? { name: path, dir: '' } : { name: path.slice(i + 1), dir: path.slice(0, i) }
 }
 
-/**
- * 레포 루트와 레포 기준 경로로 file:// 링크를 만든다 (패널에서 눌러 파일 열기).
- * C:/Users/a b/x.ts → file:///C:/Users/a%20b/x.ts, /home/a/x.ts → file:///home/a/x.ts
- */
+/** 레포 루트와 레포 기준 경로로 file:// URL 생성 */
 export function fileUrl(root: string, rel: string): string {
   const full = `${root.replace(/\/+$/, '')}/${rel}`
   const encoded = full
@@ -144,12 +122,12 @@ export function totalsOf(files: FileStat[]): Totals {
   return { files: files.length, added, deleted }
 }
 
-/** 상태 문자: A(새 파일) / M(수정) */
+/** 파일 상태 문자. A: 새 파일, M: 수정 */
 export function statusLetter(f: FileStat): 'A' | 'M' {
   return f.isNew ? 'A' : 'M'
 }
 
-/** 줄 수 표시: "+4 −1", 바이너리는 "bin" */
+/** 줄 수 표시 문자열. 바이너리는 bin */
 export function statText(f: { added: number | null; deleted: number | null }): string {
   if (f.added === null || f.deleted === null) return 'bin'
   return `+${f.added} −${f.deleted}`
@@ -157,7 +135,7 @@ export function statText(f: { added: number | null; deleted: number | null }): s
 
 export const CONFLICT_LABEL = '⚠ 다른 세션도 수정 중'
 
-/** "/changes text" 와 좁은 화면용 텍스트. 패널과 같은 구성 */
+/** 작업 파일 패널의 텍스트 버전 */
 export function panelText(commits: CommitEntry[], current: FileStat[]): string {
   const all = totalsOf(current)
   const lines: string[] = []
@@ -183,16 +161,14 @@ export function panelText(commits: CommitEntry[], current: FileStat[]): string {
   return lines.join('\n')
 }
 
-/** 패널이 필요로 하는 대략의 줄 수 (열 때 높이 요청용) */
+/** 패널 내용의 예상 줄 수 */
 export function panelRows(commits: CommitEntry[], current: FileStat[]): number {
   const commitRows = commits.length > 0 ? commits.length + 4 : 0
   const fileRows = current.length === 0 ? 1 : current.length * 2
   return 2 + commitRows + fileRows
 }
 
-// ───────────── 다른 세션의 수정 기록 ─────────────
-
-/** 저장소 키: "edit:<레포>|<파일>|<세션>" → 마지막 수정 시각(ms) */
+/** 파일 수정 기록의 저장소 키. 값은 마지막 수정 시각(ms) */
 export function editKey(repo: string, rel: string, sid: string, isWindows: boolean): string {
   const r = isWindows ? repo.toLowerCase() : repo
   const f = isWindows ? rel.toLowerCase() : rel
@@ -208,10 +184,7 @@ export function parseEditKey(key: string): { repo: string; rel: string; sid: str
   return { repo: body.slice(0, first), rel: body.slice(first + 1, last), sid: body.slice(last + 1) }
 }
 
-/**
- * 같은 레포의 수정 기록 중, 내 세션이 아닌 최근 기록이 있는 파일 → 그 세션 수.
- * 키는 Windows 면 소문자로 저장돼 있으므로 비교도 같은 규칙으로 한다.
- */
+/** 같은 레포에서 ttlMs 안에 다른 세션이 수정한 파일별 세션 수 */
 export function otherSessionsByFile(
   entries: { key: string; at: number }[],
   repo: string,
@@ -232,8 +205,6 @@ export function otherSessionsByFile(
   return new Map([...sessions].map(([rel, set]) => [rel, set.size]))
 }
 
-// ───────────── 상태줄 ─────────────
-
 export type RateLimit = { kind: string; percentUsed: number }
 
 const LIMIT_LABEL: Record<string, string> = {
@@ -246,6 +217,7 @@ export function formatUsd(usd: number): string {
   return usd < 10 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(1)}`
 }
 
+/** 상태줄 문자열 */
 export function statusText(input: {
   model?: string | null
   effort?: string | null
@@ -272,7 +244,7 @@ export function statusText(input: {
   return parts.join('  |  ')
 }
 
-/** 로컬 시간 기준 날짜 키 (YYYY-MM-DD) */
+/** 로컬 날짜 키 (YYYY-MM-DD) */
 export function dayKey(ms: number): string {
   const d = new Date(ms)
   const mm = String(d.getMonth() + 1).padStart(2, '0')
@@ -280,7 +252,7 @@ export function dayKey(ms: number): string {
   return `${d.getFullYear()}-${mm}-${dd}`
 }
 
-/** "cost:<날짜>:<세션id>" 키에서 날짜 부분 */
+/** 비용 기록 키(cost:<날짜>:<세션>)의 날짜 */
 export function dayOfCostKey(key: string): string | null {
   const m = /^cost:(\d{4}-\d{2}-\d{2}):/.exec(key)
   return m ? (m[1] ?? null) : null

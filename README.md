@@ -12,7 +12,7 @@ Claude가 한 일을 전부 일러바치는 Claude Code mod입니다. 무슨 파
 Claude Code에서 실행합니다.
 
 ```
-/plugin install snitch --marketplace <GITHUB_ID>/snitch
+/plugin install snitch --marketplace yuntaengtaeng/snitch
 ```
 
 설치 후 Claude Code를 다시 시작하면 적용됩니다.
@@ -104,6 +104,8 @@ claude plugin validate .
 ```
 claude --plugin-dir .
 ```
+
+`'claude-code'` 타입은 Claude Code가 mod를 로드할 때 `.claude-plugin/types/`에 생성합니다. 클론한 뒤 위 명령으로 한 번 실행하면 에디터의 타입 오류가 사라집니다.
 
 ## 권한
 
