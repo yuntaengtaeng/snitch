@@ -387,7 +387,8 @@ export function register(on: On) {
 
   /**
    * /changes: 패널 열기 / 닫기.
-   * "/changes text" 이거나 전체화면에서 PANE_MIN_COLUMNS 보다 좁으면 텍스트로 출력
+   * "/changes text" 이거나 전체화면에서 PANE_MIN_COLUMNS 보다 좁으면 텍스트로 출력.
+   * 실패하거나 시간을 넘기면 안내 문구로 응답
    */
   on('command.run', { command: C.CHANGES_COMMAND }, async ($, e, next) => {
     if (!repoRoot || !host) {
@@ -411,7 +412,7 @@ export function register(on: On) {
     await host.openPane(Math.min(L.panelRows(commits, current), 24))
     isPaneOpen = true
     return {}
-  })
+  }).catch(() => ({ text: '작업 파일을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }))
 
   /** 전체화면 레이아웃이면 세션당 한 번 패널 자동 열기 */
   on('ui.render', { component: 'PromptHint' }, ($, e, next) => {

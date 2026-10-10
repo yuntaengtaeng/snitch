@@ -2,7 +2,7 @@
 
 Claude가 한 일을 전부 일러바치는 Claude Code mod입니다. 무슨 파일을 고쳤는지, 커밋은 했는지, 오늘 얼마를 썼는지, 다른 세션이 같은 파일을 건드리는지 옆에서 계속 알려 줍니다.
 
-![snitch 적용 화면](docs/images/screen-interactive.png)
+![snitch 적용 화면](docs/images/screen.png)
 
 - **요구 사항**: Claude Code v2.1.287 이상 (CLI, 데스크톱 앱 Code 탭)
 - **지원 OS**: macOS, Linux, Windows
