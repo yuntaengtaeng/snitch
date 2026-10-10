@@ -58,7 +58,7 @@ function showsAgents(view: DashboardView): boolean {
 /** /snitch text 와 좁은 화면용 텍스트 버전 */
 export function dashboardText(view: DashboardView): string {
   const limits = gaugesOf(view).map(g => `${g.label} ${g.remaining}% 남음`).join(', ')
-  const header = `snitch${limits ? `  ${limits}` : ''}`
+  const header = limits
   const agents = showsAgents(view) ? R.agentsText(view.agents.agents, view.agents.now) : ''
   const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
   return [header, agents, files].filter(Boolean).join('\n\n')

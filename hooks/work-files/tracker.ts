@@ -189,10 +189,14 @@ export function createWorkFiles(deps: {
       head = await readHead()
     },
 
+    /** cwd 기준 경로나 절대 경로의 레포 기준 경로, 레포 밖이면 null */
+    repoPathOf(path: string): string | null {
+      return repoRoot ? P.relativeTo(repoRoot, P.absolutePath(path, cwd, isWindows), isWindows) : null
+    },
+
     /** 편집한 파일 추가 후 레포 기준 경로 반환, 레포 밖이면 null */
     track(path: string, agentId: string): string | null {
-      const abs = P.absolutePath(path, cwd, isWindows)
-      const rel = repoRoot ? P.relativeTo(repoRoot, abs, isWindows) : null
+      const rel = repoRoot ? P.relativeTo(repoRoot, P.absolutePath(path, cwd, isWindows), isWindows) : null
       if (rel === null) return null
       if (!tracked.includes(rel)) tracked.push(rel)
       editedBy.set(rel, agentId)

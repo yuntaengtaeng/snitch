@@ -99,12 +99,13 @@ A useCart.ts                                +38 −0
 
 **변경 이유**
 
-Claude의 응답(턴)이 끝나면 그동안 편집한 파일들(백그라운드 서브에이전트가 고친 파일 포함)의 변경 이유를 Haiku로 한 번에 요약합니다. 사용자 요청, Claude의 마지막 답변, 파일별 diff를 근거로 "무엇을"이 아니라 "왜"를 30자 안팎의 명사구로 적습니다 (예: `화면 간 장바구니 상태 공유용 훅`).
+변경 이유는 **코드를 고친 Claude가 직접** 남깁니다. snitch가 `change_note` 도구를 등록하고, Claude는 파일을 고친 응답을 마치기 전에 이 도구로 파일마다 "무엇을"이 아니라 "왜"를 30자 안팎의 명사구로 적습니다 (예: `화면 간 장바구니 상태 공유용 훅`). 서브에이전트가 고친 파일은 그 서브에이전트가 남깁니다.
 
-- 요약하는 동안에는 `변경 이유 정리 중…`으로 표시됩니다.
-- 같은 파일을 다음 턴에 다시 고치면 이유가 새로 요약됩니다.
-- 요약에 실패하면(한도, 네트워크 오류, 시간 초과) 이유 줄 없이 표시되며, `/snitch why`로 다시 요약할 수 있습니다.
-- 턴마다 모델을 한 번 호출하므로 요금제 사용량이 조금 늘어납니다. `ENABLE.changeReasons`로 자동 요약을 끌 수 있고, 꺼도 `/snitch why`는 동작합니다.
+- 대화에 `change_note` 도구 호출이 한 줄 보이며, 그 내용이 그대로 패널에 나옵니다.
+- Claude가 메모를 빠뜨린 파일만, 응답이 끝날 때 Haiku가 사용자 요청, Claude의 마지막 답변, diff를 보고 한 번에 요약합니다. 요약하는 동안에는 `변경 이유 정리 중…`으로 표시됩니다.
+- 같은 파일을 다음 턴에 다시 고치면 이유가 새로 바뀝니다.
+- 이유가 비었거나 마음에 들지 않으면 `/snitch why`로 Haiku 요약을 다시 받을 수 있습니다.
+- `ENABLE.changeNotes`로 작성자 메모를, `ENABLE.changeReasons`로 Haiku 요약을 각각 끌 수 있습니다.
 
 **패널 위치**
 
@@ -131,7 +132,12 @@ Claude의 응답(턴)이 끝나면 그동안 편집한 파일들(백그라운드
 
 ```
 claude plugin validate .
+claude plugin test .
 ```
+
+**직접 시험**
+
+Git Bash에서 `scripts/try.sh`를 실행하면 `~/snitch-test`에 깨끗한 시험 저장소를 만들고 그 안에서 snitch를 띄웁니다. 확인할 시나리오는 [docs/testing.md](docs/testing.md)에 있습니다.
 
 **고친 내용을 바로 확인 (설치 없이 한 세션에서 사용)**
 
@@ -149,10 +155,11 @@ mod는 샌드박스 없이 Claude Code와 같은 권한으로 실행됩니다. �
 |---|---|
 | `git` 실행 (읽기 전용) | `diff`, `show`, `log`, `rev-parse`, `ls-files` |
 | 파일 읽기 | 새 파일의 줄 수 계산, 변경 이유 요약에 넣을 새 파일 내용 |
-| 모델 호출 | 변경 이유 요약 (턴마다 한 번, `REASON_MODEL`) |
+| 도구 등록 | `change_note` 도구와 그 사용 안내를 시스템 프롬프트에 추가 |
+| 모델 호출 | 메모가 없는 파일의 변경 이유 요약 (`REASON_MODEL`) |
 | 플러그인 저장소 | 파일별 수정 시각 기록 (60분 후 자동 삭제) |
 
-변경 이유를 요약할 때 사용자 요청, Claude의 답변, 변경된 파일의 diff가 Claude Code를 통해 모델로 전송됩니다. 그 밖의 네트워크 접근은 하지 않습니다.
+Haiku로 변경 이유를 요약할 때 사용자 요청, Claude의 답변, 변경된 파일의 diff가 Claude Code를 통해 모델로 전송됩니다. 그 밖의 네트워크 접근은 하지 않습니다.
 
 ## 설정
 
@@ -163,7 +170,8 @@ mod는 샌드박스 없이 Claude Code와 같은 권한으로 실행됩니다. �
 | `ENABLE.statusLine` | `true` | 상태줄 표시 |
 | `ENABLE.modelEffort` | `true` | 상태줄에 모델과 effort 표시 |
 | `ENABLE.workFiles` | `true` | 대시보드 패널 |
-| `ENABLE.changeReasons` | `true` | 작업 파일의 변경 이유 한 줄 |
+| `ENABLE.changeNotes` | `true` | Claude가 `change_note` 도구로 직접 남기는 변경 이유 |
+| `ENABLE.changeReasons` | `true` | 메모가 없는 파일의 변경 이유를 Haiku로 요약 |
 | `PANE_AUTO_OPEN` | `true` | 전체화면에서 패널 자동 열기 |
 | `PANE_DOCK_COLUMNS` | `56` | 우측 패널 요청 너비 |
 | `PANE_FILE_LINKS` | `false` | 파일 이름을 file:// 링크로 표시 (링크를 지원하지 않는 터미널에서는 주소가 그대로 보임) |

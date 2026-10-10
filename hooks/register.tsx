@@ -5,6 +5,8 @@ import { createAgents } from './agents/tracker'
 import * as C from './config'
 import type { Host } from './host'
 import { dashboardRows, dashboardText, renderDashboard, type DashboardView } from './pane/dashboard'
+import { isUserRequest } from './prompt-origin'
+import { NOTE_PROMPT, NOTE_TOOL_SPEC, parseNotes } from './reasons/note-tool'
 import { createReasons } from './reasons/tracker'
 import { createStatusLine } from './status-line/tracker'
 import { changedPaths } from './work-files/edits'
@@ -59,6 +61,8 @@ export function register(on: On) {
   let host: Host | null = null
   let isPaneOpen = false
   let hasAutoOpened = false
+  /** 다음 턴이 사용자가 직접 보낸 요청으로 시작하는지 여부 */
+  let isNextTurnUserRequest = false
   let timers: { cancel: () => void }[] = []
 
   const getHost = () => host
@@ -103,6 +107,10 @@ export function register(on: On) {
       }),
     ]
 
+    if (C.ENABLE.workFiles && C.ENABLE.changeNotes) {
+      await $.tool.register(NOTE_TOOL_SPEC).catch(() => undefined)
+    }
+
     if (C.ENABLE.workFiles) {
       for (const name of [C.DASHBOARD_COMMAND, C.CHANGES_COMMAND]) {
         await $.command
@@ -138,9 +146,19 @@ export function register(on: On) {
     return yield* next(e)
   })
 
+  /** 사용자가 직접 보낸 요청이면 변경 이유의 근거로 기록하고 다음 턴을 새 요청으로 표시 */
+  on('prompt.submit', async ($, e, next) => {
+    if (isUserRequest(e.origin.kind)) {
+      reasons.noteRequest(e.text)
+      isNextTurnUserRequest = true
+    }
+    return next(e)
+  })
+
+  /** 메인 대화 턴 시작, 새 요청이면 끝난 서브에이전트 정리 */
   on('turn.start', async ($, e, next) => {
-    reasons.noteRequest(e.text)
-    await agents.turnStarted(e.text.trim() !== '')
+    await agents.turnStarted(isNextTurnUserRequest)
+    isNextTurnUserRequest = false
     return next(e)
   })
 
@@ -159,6 +177,23 @@ export function register(on: On) {
     return r
   })
 
+  /** 변경 메모 도구가 제공될 때 시스템 프롬프트에 사용 안내 추가 */
+  on('prompt.compose', async ($, e, next) => {
+    const r = await next(e)
+    if (!e.tools.includes(C.NOTE_TOOL_ID)) return r
+    return { sections: [...r.sections, { id: 'snitch:change-note', text: NOTE_PROMPT, scope: 'session' as const }] }
+  })
+
+  /** 변경 메모 도구 호출에 응답하고 메모를 변경 이유로 반영 */
+  on('tool.call', { tool: C.NOTE_TOOL_ID }, async ($, e, next) => {
+    const notes = parseNotes(e as unknown as Record<string, unknown>).flatMap(n => {
+      const rel = workFiles.repoPathOf(n.path)
+      return rel === null ? [] : [{ rel, reason: n.reason }]
+    })
+    const count = reasons.noted(notes)
+    return { result: count > 0 ? `변경 메모 ${count}개 기록` : '기록할 변경 메모 없음, 레포 안 파일 경로와 이유 확인 필요' }
+  })
+
   on('session.measure', async ($, e, next) => {
     statusLine.measured(e.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })))
     redraw()
@@ -171,7 +206,7 @@ export function register(on: On) {
     if (r.deny !== undefined) return r
 
     const input = e as unknown as Record<string, unknown>
-    agents.acted(e.agentId, e.tool, input)
+    if (e.tool !== C.NOTE_TOOL_ID) agents.acted(e.agentId, e.tool, input)
 
     for (const path of changedPaths(e.tool, input, r.result, r.isError === true)) {
       const rel = workFiles.track(path, e.agentId ?? MAIN_ID)

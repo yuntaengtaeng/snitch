@@ -1,6 +1,6 @@
 import * as C from '../config'
 import type { Host } from '../host'
-import { parseReasons, reasonPrompt, REASON_SYSTEM, type ChangedFile } from './prompt'
+import { parseReasons, reasonPrompt, REASON_SYSTEM, tidyReason, type ChangedFile } from './prompt'
 
 export type ReasonsView = {
   /** 파일별 변경 이유 한 줄 (레포 기준 경로) */
@@ -9,7 +9,7 @@ export type ReasonsView = {
   explaining: ReadonlySet<string>
 }
 
-/** 메인 대화 턴이 끝날 때 쌓인 편집 파일의 변경 이유를 모델 한 번 호출로 요약 */
+/** 작성자가 남긴 변경 메모 보관, 메모 없는 파일은 메인 대화 턴이 끝날 때 모델 한 번 호출로 요약 */
 export function createReasons(deps: {
   getHost: () => Host | null
   /** 파일 하나의 HEAD 대비 변경 내용, 변경 없으면 null */
@@ -19,7 +19,7 @@ export function createReasons(deps: {
 }) {
   const reasons = new Map<string, string>()
   const explaining = new Set<string>()
-  /** 아직 이유를 요약하지 않은 편집 파일 */
+  /** 메모도 요약도 아직 없는 편집 파일 */
   const pending = new Set<string>()
   let request = ''
 
@@ -60,7 +60,21 @@ export function createReasons(deps: {
       pending.add(rel)
     },
 
-    /** 메인 대화 턴 종료 시 쌓인 편집 파일의 이유 요약 시작 */
+    /** 코드를 고친 Claude 가 change_note 로 남긴 이유 반영, 반영한 개수 반환 */
+    noted(notes: { rel: string; reason: string }[]): number {
+      let count = 0
+      for (const { rel, reason } of notes) {
+        const tidy = tidyReason(reason)
+        if (!tidy) continue
+        reasons.set(rel, tidy.length > C.REASON_MAX_CHARS ? `${tidy.slice(0, C.REASON_MAX_CHARS - 1)}…` : tidy)
+        pending.delete(rel)
+        count += 1
+      }
+      if (count > 0) deps.onChange()
+      return count
+    },
+
+    /** 메인 대화 턴 종료 시 메모 없이 남은 편집 파일의 이유 요약 시작 */
     turnEnded(answer: string) {
       if (pending.size === 0) return
       const paths = [...pending]
