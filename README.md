@@ -1,5 +1,7 @@
 # snitch
 
+한국어 | [English](README.en.md)
+
 Claude가 한 일을 전부 일러바치는 Claude Code mod입니다. 무슨 파일을 왜 고쳤는지, 서브에이전트가 무엇을 하고 있는지, 커밋은 했는지, 다른 세션이 같은 파일을 건드리는지 옆에서 계속 알려 줍니다.
 
 ![snitch 적용 화면](docs/images/screen.png)
@@ -11,10 +13,17 @@ Claude가 한 일을 전부 일러바치는 Claude Code mod입니다. 무슨 파
 
 ## 설치
 
-Claude Code에서 실행합니다.
+Claude Code에서 마켓플레이스를 추가한 뒤 설치합니다.
 
 ```
-/plugin install snitch --marketplace yuntaengtaeng/snitch
+/plugin marketplace add yuntaengtaeng/snitch
+/plugin install snitch@snitch
+```
+
+터미널에서는 한 줄로 설치할 수 있습니다.
+
+```
+claude plugin install snitch --marketplace yuntaengtaeng/snitch
 ```
 
 설치 후 Claude Code를 다시 시작하면 적용됩니다.
@@ -167,6 +176,8 @@ mod는 샌드박스 없이 Claude Code와 같은 권한으로 실행됩니다. �
 
 Haiku로 변경 이유를 요약할 때 사용자 요청, Claude의 답변, 변경된 파일의 diff가 Claude Code를 통해 모델로 전송됩니다. 그 밖의 네트워크 접근은 하지 않습니다.
 
+이 요약 호출은 Claude Code 사용량(요금제 한도)에 포함됩니다. Claude가 `change_note`로 메모를 남긴 파일은 요약하지 않으므로 메모가 빠진 경우에만 호출하며, `ENABLE.changeReasons`를 끄면 호출하지 않습니다.
+
 ## 설정
 
 `hooks/config.ts`
@@ -200,3 +211,7 @@ Haiku로 변경 이유를 요약할 때 사용자 요청, Claude의 답변, 변�
 - git 저장소가 아닌 폴더에서는 대시보드 패널이 동작하지 않습니다.
 - 다른 세션 표시는 같은 PC, 같은 폴더의 세션끼리만 동작합니다. git worktree로 나눈 폴더나 다른 PC의 세션은 감지하지 않습니다.
 - mod API는 초기 단계로, Claude Code 업데이트에 따라 동작이 달라질 수 있습니다.
+
+## 라이선스
+
+[MIT](LICENSE)
