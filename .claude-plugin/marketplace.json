@@ -1,6 +1,6 @@
 {
   "name": "snitch",
-  "owner": { "name": "yuntaeko" },
+  "owner": { "name": "yuntaengtaeng" },
   "description": "Claude가 한 일을 전부 일러바치는 Claude Code mod",
   "plugins": [
     {
