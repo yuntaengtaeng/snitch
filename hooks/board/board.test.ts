@@ -84,6 +84,15 @@ test('urlPins: 끝 문장부호를 떼고 GitHub 와 아티팩트는 짧은 이�
   ])
 })
 
+test('urlPins: git push 출력에서 원격 주소는 빼고 PR 만들기 주소만 남긴다', () => {
+  const pushOutput = [
+    'remote: Create a pull request for \'cart\' on GitHub by visiting:',
+    'remote:      https://github.com/a/snitch/pull/new/cart',
+    'To https://github.com/a/snitch.git',
+  ].join('\n')
+  expect(urlPins(pushOutput).map(p => p.href)).toEqual(['https://github.com/a/snitch/pull/new/cart'])
+})
+
 test('addLinks: 새 링크가 앞에 오고 같은 주소는 하나만, 최대 개수 유지', () => {
   let board = EMPTY_BOARD
   for (let i = 0; i < MAX_LINKS + 2; i++) board = addLinks(board, [{ href: `https://x.dev/${i}`, label: `${i}` }])

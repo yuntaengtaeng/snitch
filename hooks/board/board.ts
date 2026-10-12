@@ -175,8 +175,10 @@ export function pinLabel(href: string): string {
   return href.slice('https://'.length)
 }
 
-/** 툴 결과 글에서 꺼낸 링크, 중복과 메일 주소 제외 */
+/** 툴 결과 글에서 꺼낸 링크, 중복과 메일 주소와 git 원격 주소(.git) 제외 */
 export function urlPins(text: string): Pin[] {
   const hrefs = [...new Set([...text.matchAll(URL_PATTERN)].map(m => m[0].replace(/[)\].,;:'!?*]+$/, '')))]
-  return hrefs.filter(href => !href.includes('@') && href.length <= 2048).map(href => ({ href, label: pinLabel(href) }))
+  return hrefs
+    .filter(href => !href.includes('@') && !href.endsWith('.git') && href.length <= 2048)
+    .map(href => ({ href, label: pinLabel(href) }))
 }
