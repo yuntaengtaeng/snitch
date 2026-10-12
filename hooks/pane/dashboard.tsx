@@ -2,22 +2,26 @@ import type { Elements, RenderChildren } from 'claude-code'
 
 import * as R from '../agents/roster'
 import type { AgentsView } from '../agents/tracker'
+import type { BoardView } from '../board/tracker'
+import * as BV from '../board/view'
 import * as C from '../config'
 import { splitPath } from '../paths'
 import { latestReason, type ReasonsView } from '../reasons/tracker'
+import { renderBoard, type BoardActions, type BoardUi } from './board-section'
 import { limitGauge, type LimitGauge, type RateLimit } from '../status-line/text'
 import type { WorkFilesView } from '../work-files/tracker'
 import * as V from '../work-files/view'
 
 export type DashboardView = {
   agents: AgentsView
+  board: BoardView
   files: WorkFilesView
   reasons: ReasonsView
   /** 요금제 한도 사용률, 구독 요금제가 아니면 빈 배열 */
   limits: readonly RateLimit[]
 }
 
-type Ui = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Button'>
+type Ui = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Button'> & BoardUi
 
 const STATE_COLOR: Record<R.AgentState, 'inactive' | 'warning' | 'success' | 'error'> = {
   waiting: 'inactive',
@@ -63,8 +67,9 @@ export function dashboardText(view: DashboardView): string {
     .join(', ')
   const header = limits
   const agents = showsAgents(view) ? R.agentsText(view.agents.agents, view.agents.now) : ''
+  const board = BV.boardText(view.board.board)
   const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
-  return [header, agents, files].filter(Boolean).join('\n\n')
+  return [header, board, agents, files].filter(Boolean).join('\n\n')
 }
 
 /** 패널을 열 때 요청할 줄 수 */
@@ -74,12 +79,17 @@ export function dashboardRows(view: DashboardView): number {
     return n + (reason ? 1 : 0) + (place ? 1 : 0)
   }, 0)
   const agentRows = showsAgents(view) ? R.agentsRows(view.agents.agents) : 0
-  const rows = 2 + agentRows + V.filesRows(view.files.commits, view.files.current, noteLines)
+  const rows = 2 + BV.boardRows(view.board.board) + agentRows + V.filesRows(view.files.commits, view.files.current, noteLines)
   return Math.min(rows, C.PANE_MAX_ROWS)
 }
 
-/** 에이전트, 변경 파일, 커밋 구역으로 된 대시보드 패널, 파일 행을 누르면 상세 화면 */
-export function renderDashboard(ui: Ui, view: DashboardView, width: number, actions: { openFile: (path: string) => void }) {
+/** 기억할 거리, 에이전트, 변경 파일, 커밋 구역으로 된 대시보드 패널, 파일 행을 누르면 상세 화면 */
+export function renderDashboard(
+  ui: Ui,
+  view: DashboardView,
+  width: number,
+  actions: BoardActions & { openFile: (path: string) => void },
+) {
   const { Box, Text, Button } = ui
   const { agents, files } = view
   const { commits, current } = files
@@ -214,6 +224,7 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number, acti
       <Text key="divider" color="inactive">
         {'─'.repeat(Math.max(1, width - 2))}
       </Text>
+      {renderBoard(ui, view.board, actions)}
       {showsAgents(view) ? section('s-agents', '에이전트', agents.agents.length) : <Text key="na" />}
       {showsAgents(view) ? agentRows : <Text key="nar" />}
       {section('s-files', '변경 파일', current.length, current.length > 0 ? stat(all) : undefined)}

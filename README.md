@@ -101,6 +101,40 @@ A useCart.ts                                +38 −0
 
 `/changes`도 같은 동작을 하는 별칭입니다.
 
+**기억할 거리**
+
+대화 중에 생긴 결정, 할 일, 링크를 패널 맨 위에 모아 둡니다. 대화가 길어져 스크롤이 올라가도 잊히지 않게 하는 구역입니다. [pinboard](https://github.com/sirkitree/pinboard)를 참고했습니다.
+
+```
+╭──────────────────────────────────────────────╮
+│ 결정 필요 1                                   │
+│ 라이선스를 무엇으로 할까                      │
+│ [ MIT ] [ Apache-2.0 ] [ 직접 답하기 ]        │
+╰──────────────────────────────────────────────╯
+
+할 일 2/4                               ▰▰▰▱▱▱
+▸ PR 열기                               진행 중
+○ CI 이슈 등록
+✓ 2개 완료
+
+링크 1                                  지우기
+  snitch PR #12
+```
+
+| 종류 | 만드는 주체 | 방식 |
+|---|---|---|
+| 결정 | Claude | 사용자가 답해야 하는 질문을 `board` 도구로 남김, 고를 답이 정해져 있으면 선택지도 함께 |
+| 할 일 | Claude | 3단계 이상 작업을 `board` 도구로 등록, 진행 중은 하나만, 확인까지 끝나야 완료 |
+| 링크 | 자동 | 무언가를 만든 명령의 결과에 나온 주소만 모음 |
+
+- **결정에 답하기:** 선택지 버튼을 누르면 `[결정 d1] 라이선스를 무엇으로 할까: MIT`가 내 요청으로 바로 전송됩니다. `직접 답하기`를 누르면 입력칸이 열립니다. Claude가 답을 받아 결정을 닫을 때까지는 `답변 보냄`으로 표시됩니다.
+- **질문을 놓쳤을 때:** Claude가 질문으로 응답을 끝냈는데 결정을 남기지 않았으면, snitch가 한 번 돌려보내 결정으로 남기게 합니다. 수사적 질문이면 Claude가 그대로 끝냅니다.
+- **Claude도 잊지 않게:** 지금 보드 내용을 매 요청마다 시스템 프롬프트 끝에 붙여, Claude도 열린 할 일과 결정을 압니다.
+- **링크를 모으는 명령:** `gh pr|issue|release|repo|gist create`, `gh pr|issue comment`, `git push`, `vercel deploy`, `vercel --prod`, `netlify deploy`, `firebase deploy`, `wrangler deploy`, Claude가 게시한 아티팩트, 새로 만든 Claude Docs 문서, 이름에 create, draft, send, publish, share, upload가 들어간 MCP 도구. 결과에 주소가 4개 이상이면 만든 결과물이 아니라고 보고 무시합니다. 최근 12개까지 남깁니다.
+- 빈 구역은 숨기고, 빈 보드에 첫 항목이 생기면 패널을 엽니다.
+- 보드는 메인 대화만 고칠 수 있고, `/clear`, `/resume` 때 비웁니다.
+- 대화창에는 도구 호출이 `snitch 보드: 할 일 +2, 결정 1개 닫음` 한 줄로만 보입니다.
+
 **에이전트**
 
 ![에이전트 현황](docs/images/agents.png)
@@ -220,6 +254,7 @@ Haiku로 변경 이유를 요약할 때 사용자 요청, Claude의 답변, 변�
 | `ENABLE.workFiles` | `true` | 대시보드 패널 |
 | `ENABLE.changeNotes` | `true` | Claude가 `change_note` 도구로 직접 남기는 변경 이유 |
 | `ENABLE.changeReasons` | `true` | 메모가 없는 파일의 변경 이유를 Haiku로 요약 |
+| `ENABLE.board` | `true` | 결정, 할 일, 링크를 모으는 기억할 거리 보드 |
 | `PANE_AUTO_OPEN` | `true` | 전체화면에서 패널 자동 열기 |
 | `PANE_DOCK_COLUMNS` | `56` | 우측 패널 요청 너비 |
 | `PANE_FILE_LINKS` | `false` | 파일 상세 화면의 파일 이름을 file:// 링크로 표시 (링크를 지원하지 않는 터미널에서는 주소가 그대로 보임) |

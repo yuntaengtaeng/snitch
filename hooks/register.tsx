@@ -2,10 +2,15 @@ import type { EngineInterface, On } from 'claude-code'
 
 import { MAIN_ID } from './agents/roster'
 import { createAgents } from './agents/tracker'
+import { asksUser, makesSomething, parseUpdate, updateSummary } from './board/board'
+import { BOARD_TOOL_SPEC, NUDGE } from './board/tool'
+import { createBoard } from './board/tracker'
+import { isBoardEmpty } from './board/view'
 import * as C from './config'
 import { createFileDetail } from './file-detail/tracker'
 import type { Host } from './host'
 import { dashboardRows, dashboardText, renderDashboard, type DashboardView } from './pane/dashboard'
+import { answerKey } from './pane/board-section'
 import { askKey, renderFileDetail } from './pane/detail'
 import { fileUrl } from './paths'
 import { isUserRequest } from './prompt-origin'
@@ -115,8 +120,18 @@ export function register(on: On) {
     return paths.find(p => p === query) ?? paths.find(p => p.endsWith(`/${query}`)) ?? null
   }
 
+  const board = createBoard({
+    getHost,
+    onSent: text => {
+      reasons.noteRequest(text)
+      isNextTurnUserRequest = true
+    },
+    onChange: redraw,
+  })
+
   const dashboard = (): DashboardView => ({
     agents: agents.view(),
+    board: board.view(),
     files: workFiles.view(),
     reasons: reasons.view(),
     limits: statusLine.limits(),
@@ -143,6 +158,21 @@ export function register(on: On) {
     if (fileDetail.view().asking === index) void host?.focusPane(askKey(index)).catch(() => undefined)
   }
 
+  /** 결정의 직접 답하기 입력칸을 열고 포커스 이동 */
+  const toggleAnswering = (id: string) => {
+    board.toggleAnswering(id)
+    if (board.view().answering === id) void host?.focusPane(answerKey(id)).catch(() => undefined)
+  }
+
+  /** 빈 보드에 첫 항목이 생기면 패널 열기 */
+  const openIfFirstPin = (wasEmpty: boolean) => {
+    if (!wasEmpty || isPaneOpen || isBoardEmpty(board.view().board) || !host) return
+    isPaneOpen = true
+    void host.openPane(dashboardRows(dashboard())).catch(() => {
+      isPaneOpen = false
+    })
+  }
+
   on('session.start', async ($, e, next) => {
     host = createHost($)
     const sid = await $.session.id().catch(() => '')
@@ -152,6 +182,7 @@ export function register(on: On) {
     statusLine.start()
     reasons.clear()
     fileDetail.close()
+    board.clear()
     await agents.clear()
     await workFiles.start(e.cwd, sid)
 
@@ -167,6 +198,9 @@ export function register(on: On) {
 
     if (C.ENABLE.workFiles && C.ENABLE.changeNotes) {
       await $.tool.register(NOTE_TOOL_SPEC).catch(() => undefined)
+    }
+    if (C.ENABLE.board) {
+      await $.tool.register(BOARD_TOOL_SPEC).catch(() => undefined)
     }
 
     if (C.ENABLE.workFiles) {
@@ -192,6 +226,7 @@ export function register(on: On) {
     await workFiles.clear()
     reasons.clear()
     fileDetail.close()
+    board.clear()
     await agents.clear()
     redraw()
     return r
@@ -237,12 +272,46 @@ export function register(on: On) {
     return r
   })
 
-  /** 변경 메모 도구가 제공될 때 시스템 프롬프트에 사용 안내 추가 */
+  /** 변경 메모 안내와 지금 보드를 시스템 프롬프트 끝에 추가, 도구가 제공될 때만 */
   on('prompt.compose', async ($, e, next) => {
     const r = await next(e)
-    if (!e.tools.includes(C.NOTE_TOOL_ID)) return r
-    return { sections: [...r.sections, { id: 'snitch:change-note', text: NOTE_PROMPT, scope: 'session' as const }] }
+    const sections = [...r.sections]
+    if (e.tools.includes(C.NOTE_TOOL_ID)) {
+      sections.push({ id: 'snitch:change-note', text: NOTE_PROMPT, scope: 'session' as const })
+    }
+    if (e.tools.includes(C.BOARD_TOOL_ID)) {
+      sections.push({ id: 'snitch:board', text: board.describe(), scope: 'session' as const })
+    }
+    return { sections }
   })
+
+  /** 보드 도구 호출 반영, 서브에이전트는 거부 */
+  on('tool.call', { tool: C.BOARD_TOOL_ID }, async ($, e, next) => {
+    if (e.agentId) return { deny: '보드는 메인 대화만 고칠 수 있음' }
+    const wasEmpty = isBoardEmpty(board.view().board)
+    const result = board.apply(parseUpdate(e as unknown as Record<string, unknown>))
+    openIfFirstPin(wasEmpty)
+    return { result }
+  })
+
+  /** 질문으로 끝난 응답인데 열린 결정이 없으면 한 번 돌려보내 결정으로 남기게 함 */
+  on('classic.Stop', async ($, e, next) => {
+    const ran = await next(e)
+    if (!C.ENABLE.board || ran.block || e.stop_hook_active) return ran
+    if (!asksUser(e.last_assistant_message ?? '') || board.hasOpenDecision()) return ran
+    return { ...ran, block: NUDGE }
+  })
+
+  /** 보드 도구 호출은 대화창에 흐린 한 줄로만 표시 */
+  on('ui.render', { component: 'ToolUse', props: { tool: C.BOARD_TOOL_ID } }, async ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const change = parseUpdate((e.props.input ?? {}) as Record<string, unknown>)
+    return <Text dimColor>{updateSummary(change)}</Text>
+  })
+
+  on('ui.render', { component: 'ToolResult', props: { tool: C.BOARD_TOOL_ID } }, async ($, e, next) =>
+    e.props.isErrored ? next(e) : $.ui.resolve(e).Text({ children: [''] }),
+  )
 
   /** 변경 메모 도구 호출에 응답하고 메모를 변경 이유로 반영 */
   on('tool.call', { tool: C.NOTE_TOOL_ID }, async ($, e, next) => {
@@ -266,7 +335,14 @@ export function register(on: On) {
     if (r.deny !== undefined) return r
 
     const input = e as unknown as Record<string, unknown>
-    if (e.tool !== C.NOTE_TOOL_ID) agents.acted(e.agentId, e.tool, input)
+    if (e.tool !== C.NOTE_TOOL_ID && e.tool !== C.BOARD_TOOL_ID) agents.acted(e.agentId, e.tool, input)
+
+    const madeText = 'text' in r && r.isError !== true ? r.text : undefined
+    if (C.ENABLE.board && !e.agentId && madeText && makesSomething(e.tool, input)) {
+      const wasEmpty = isBoardEmpty(board.view().board)
+      board.captureLinks(madeText)
+      openIfFirstPin(wasEmpty)
+    }
 
     for (const path of changedPaths(e.tool, input, r.result, r.isError === true)) {
       const rel = workFiles.track(path, e.agentId ?? MAIN_ID)
@@ -349,7 +425,14 @@ export function register(on: On) {
     const width = Math.max(20, e.props.bodyColumns)
     const detail = fileDetail.view()
     const { path } = detail
-    if (path === null) return renderDashboard($.ui.resolve(e), dashboard(), width, { openFile })
+    if (path === null) {
+      return renderDashboard($.ui.resolve(e), dashboard(), width, {
+        openFile,
+        answer: (id, value) => board.answer(id, value),
+        toggleAnswering,
+        clearLinks: () => board.clearLinks(),
+      })
+    }
 
     const { repoRoot, current } = workFiles.view()
     return renderFileDetail(

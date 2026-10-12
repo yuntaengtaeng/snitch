@@ -1,0 +1,68 @@
+import type { Board, Decision, Todo } from './board'
+
+/** 보드 구역의 진행 막대, 텍스트 버전, 줄 수 */
+
+export const TODO_ICON: Record<Todo['state'], string> = { active: '▸', open: '○', done: '✓' }
+
+/** 완료 비율 막대, segments 칸 */
+export function progressBar(done: number, total: number, segments: number): string {
+  const filled = total === 0 ? 0 : Math.round((done / total) * segments)
+  return '▰'.repeat(filled) + '▱'.repeat(segments - filled)
+}
+
+/** 완료되지 않은 할 일, 진행 중이 맨 앞 */
+export function openTodos(todos: readonly Todo[]): Todo[] {
+  return [...todos.filter(t => t.state === 'active'), ...todos.filter(t => t.state === 'open')]
+}
+
+export function doneCount(todos: readonly Todo[]): number {
+  return todos.filter(t => t.state === 'done').length
+}
+
+/** 결정 하나의 답 상태 문구, 답하지 않았으면 빈 문자열 */
+export function answeredText(d: Decision): string {
+  return d.answered ? `답변 보냄, ${d.answered}` : ''
+}
+
+export function isBoardEmpty(board: Board): boolean {
+  return board.todos.length + board.decisions.length + board.links.length === 0
+}
+
+/** /snitch text 용 보드 텍스트, 비었으면 빈 문자열 */
+export function boardText(board: Board): string {
+  const lines: string[] = []
+  if (board.decisions.length > 0) {
+    lines.push(`결정 필요 ${board.decisions.length}`)
+    for (const d of board.decisions) {
+      lines.push(`  ? ${d.text}`)
+      if (d.options.length > 0) lines.push(`    선택지: ${d.options.join(', ')}`)
+      if (d.answered) lines.push(`    ${answeredText(d)}`)
+    }
+  }
+  if (board.todos.length > 0) {
+    if (lines.length > 0) lines.push('')
+    lines.push(`할 일 ${doneCount(board.todos)}/${board.todos.length}`)
+    for (const t of openTodos(board.todos)) lines.push(`  ${TODO_ICON[t.state]} ${t.text}`)
+    const done = doneCount(board.todos)
+    if (done > 0) lines.push(`  ✓ ${done}개 완료`)
+  }
+  if (board.links.length > 0) {
+    if (lines.length > 0) lines.push('')
+    lines.push(`링크 ${board.links.length}`)
+    for (const p of board.links) lines.push(`  ${p.label}  ${p.href}`)
+  }
+  return lines.join('\n')
+}
+
+/** 보드 구역이 차지할 대략의 줄 수, 비었으면 0 */
+export function boardRows(board: Board): number {
+  let rows = 0
+  if (board.decisions.length > 0) {
+    rows += 3 + board.decisions.reduce((n, d) => n + 2 + (d.answered ? 1 : 0), 0)
+  }
+  if (board.todos.length > 0) {
+    rows += 2 + openTodos(board.todos).length + (doneCount(board.todos) > 0 ? 1 : 0)
+  }
+  if (board.links.length > 0) rows += 2 + board.links.length
+  return rows
+}

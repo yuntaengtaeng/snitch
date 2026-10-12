@@ -10,6 +10,8 @@ export const ENABLE = {
   changeNotes: true,
   /** 메모가 없는 파일의 변경 이유를 턴 끝에 REASON_MODEL 로 요약 */
   changeReasons: true,
+  /** 할 일, 결정, 링크를 모으는 기억할 거리 보드 */
+  board: true,
 }
 
 export const PANE_ID = 'k-work-files'
@@ -19,6 +21,9 @@ export const DASHBOARD_COMMAND = 'snitch'
 
 /** 변경 메모 도구가 모델에게 보이는 전체 이름 */
 export const NOTE_TOOL_ID = 'mcp__snitch__change_note'
+
+/** 보드 도구가 모델에게 보이는 전체 이름 */
+export const BOARD_TOOL_ID = 'mcp__snitch__board'
 
 /** 작업 파일로 추적할 편집 툴 */
 export const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] as const
