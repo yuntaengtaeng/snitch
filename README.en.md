@@ -123,6 +123,7 @@ Mods run without a sandbox, with the same permissions as Claude Code.
 | Reading files | Line counts and contents of new files |
 | Registering tools | The `change_note` and `board` tools with their instructions, and the current board, added to the system prompt |
 | Sending prompts | Decision answers and edit requests, only when you press a button or submit an input |
+| Writing the clipboard | Only when you press a board link, to copy its address |
 | Sending a reply back | Once, when Claude ends on a question without recording a decision |
 | Calling a model | Summarizing reasons for files without a note (`REASON_MODEL`, counts toward your plan limits) |
 | Plugin storage | Per-file edit times for the other-session warning (deleted after 60 minutes) |
