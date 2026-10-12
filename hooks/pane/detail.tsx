@@ -99,7 +99,6 @@ export function renderFileDetail(
           <Button
             key={`req-${p.index}`}
             label={view.asking === p.index ? '취소' : '수정 요청'}
-            plain
             dimColor={view.asking !== p.index}
             hotkey={p.index < 9 ? String(p.index + 1) : undefined}
             onPress={() => actions.ask(p.index)}
