@@ -7,8 +7,6 @@ export type BoardView = {
   board: B.Board
   /** 직접 답하기 입력칸을 연 결정 id */
   answering: string | null
-  /** 마지막으로 복사를 시도한 링크와 성공 여부 */
-  copied: { href: string; isCopied: boolean } | null
 }
 
 /** 기억할 거리 보드 상태, 결정에 답하면 사용자 요청으로 전송 */
@@ -21,7 +19,6 @@ export function createBoard(deps: {
 }) {
   let board: B.Board = B.EMPTY_BOARD
   let answering: string | null = null
-  let copied: BoardView['copied'] = null
 
   function set(next: B.Board) {
     board = next
@@ -43,21 +40,17 @@ export function createBoard(deps: {
     },
 
     clearLinks() {
-      copied = null
       set({ ...board, links: [] })
     },
 
-    /** 링크 주소를 버튼을 누른 화면의 클립보드에 복사하고 결과 표시 */
-    copyLink(href: string, surface: RenderSurface) {
+    /** 링크 주소를 버튼을 누른 화면의 클립보드에 복사하고 결과를 토스트로 알림 */
+    copyLink(pin: B.Pin, surface: RenderSurface) {
       const host = deps.getHost()
       if (!host) return
       void host
-        .copy(href, surface)
+        .copy(pin.href, surface)
         .catch(() => false)
-        .then(isCopied => {
-          copied = { href, isCopied }
-          deps.onChange()
-        })
+        .then(isCopied => host.toast(isCopied ? `주소 복사함, ${pin.label}` : '주소 복사 실패'))
     },
 
     /** 직접 답하기 입력칸 열기, 같은 결정이면 닫기 */
@@ -84,9 +77,8 @@ export function createBoard(deps: {
     clear() {
       board = B.EMPTY_BOARD
       answering = null
-      copied = null
     },
 
-    view: (): BoardView => ({ board, answering, copied }),
+    view: (): BoardView => ({ board, answering }),
   }
 }

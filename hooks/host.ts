@@ -22,6 +22,8 @@ export type Host = {
   submitPrompt: (text: string) => Promise<void>
   /** 버튼을 누른 화면의 클립보드에 복사, 복사됐는지 반환 */
   copy: (text: string, surface: RenderSurface) => Promise<boolean>
+  /** 대화창 위에 몇 초 동안 뜨는 짧은 알림 */
+  toast: (text: string) => void
   paneState: () => Promise<{ isOpen: boolean; isPlaced: boolean; isShown: boolean }>
   every: (ms: number, fn: () => void) => { cancel: () => void }
   /** REASON_MODEL 의 답 텍스트, 답이 없으면 null */

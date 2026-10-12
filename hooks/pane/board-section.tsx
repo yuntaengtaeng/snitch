@@ -1,5 +1,6 @@
 import type { Elements, RenderSurface } from 'claude-code'
 
+import type { Pin } from '../board/board'
 import type { BoardView } from '../board/tracker'
 import * as BV from '../board/view'
 
@@ -11,7 +12,7 @@ export type BoardActions = {
   answer: (id: string, value: string) => void
   toggleAnswering: (id: string) => void
   clearLinks: () => void
-  copyLink: (href: string, surface: RenderSurface) => void
+  copyLink: (pin: Pin, surface: RenderSurface) => void
 }
 
 /** 직접 답하기 입력칸의 요소 주소 */
@@ -19,13 +20,16 @@ export function answerKey(id: string): string {
   return `answer-${id}`
 }
 
+/** 링크 복사 버튼 기호, 이모지가 아닌 겹친 사각형 */
+const COPY_ICON = '⧉'
+
 /** 할 일 진행 막대 칸 수 */
 const TODO_BAR_SEGMENTS = 6
 
 /** 결정 카드, 할 일, 링크 구역, 비어 있는 구역은 그리지 않음 */
 export function renderBoard(ui: BoardUi, view: BoardView, actions: BoardActions) {
   const { Box, Text, Button, Input } = ui
-  const { board, answering, copied } = view
+  const { board, answering } = view
   const open = BV.openTodos(board.todos)
   const done = BV.doneCount(board.todos)
 
@@ -128,15 +132,17 @@ export function renderBoard(ui: BoardUi, view: BoardView, actions: BoardActions)
         {board.links.map(p => (
           <Box key={`l-${p.href}`} flexDirection="row" paddingLeft={2}>
             <Box flexGrow={1} flexShrink={1}>
-              <Button key={`copy-${p.href}`} plain onPress={press => actions.copyLink(p.href, press.surface)}>
+              <Button key={`copy-${p.href}`} plain onPress={press => actions.copyLink(p, press.surface)}>
                 <Text wrap="truncate-end">{p.label}</Text>
               </Button>
             </Box>
-            {copied?.href === p.href ? (
-              <Text color={copied.isCopied ? 'success' : 'error'}>{copied.isCopied ? ' 주소 복사함' : ' 복사 실패'}</Text>
-            ) : (
-              <Text color="inactive">{' 복사'}</Text>
-            )}
+            <Button
+              key={`copy-icon-${p.href}`}
+              label={COPY_ICON}
+              plain
+              dimColor
+              onPress={press => actions.copyLink(p, press.surface)}
+            />
           </Box>
         ))}
       </Box>

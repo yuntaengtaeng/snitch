@@ -49,7 +49,7 @@ Decisions, todos and links stay pinned to the top of the pane so they don't scro
 
 - **Decisions** (결정 필요): questions Claude needs you to answer. Press an option button or **Answer myself** (직접 답하기); your answer is sent as your prompt and Claude closes the decision.
 - **Todos** (할 일): multi-step work Claude registers, with the item in progress and the done count.
-- **Links** (링크): only links to things Claude made in this session, such as PRs, deploy URLs and artifacts. Press one to copy its full address.
+- **Links** (링크): only links to things Claude made in this session, such as PRs, deploy URLs and artifacts. Press its name or `⧉` to copy the full address; a toast confirms it.
 
 The board is also passed to Claude on every request, so Claude doesn't forget open decisions and todos either.
 
