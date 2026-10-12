@@ -35,6 +35,9 @@ export const AGENT_TICK_SEC = 5
 /** 대시보드 제목 줄의 한도 막대 칸 수 */
 export const LIMIT_BAR_SEGMENTS = 6
 
+/** 패널 제목 줄에 한도 초기화 시각을 붙이는 최소 너비(칸) */
+export const RESET_MIN_COLUMNS = 50
+
 /** 파일 이름을 file:// 링크로 표시할지 여부, 링크를 지원하지 않는 터미널에서는 주소가 그대로 보임 */
 export const PANE_FILE_LINKS = false
 
@@ -61,6 +64,9 @@ export const REASON_DIFF_CHARS = 12_000
 
 /** 변경 이유 한 줄의 최대 글자 수 */
 export const REASON_MAX_CHARS = 30
+
+/** 파일 상세 화면에 그릴 diff 최대 글자 수, 넘는 뒤쪽 hunk 는 생략 */
+export const DETAIL_DIFF_CHARS = 20_000
 
 /** 변경 이유 요약 요청의 제한 시간(초) */
 export const REASON_TIMEOUT_SEC = 30

@@ -1,0 +1,97 @@
+import * as C from '../config'
+import type { Host } from '../host'
+import type { FileChange } from '../work-files/git'
+import { diffParts, type DiffParts } from './diff'
+import { editRequestContext, editRequestText } from './request'
+
+export type FileDetailView = {
+  /** 상세 화면으로 연 파일 (레포 기준 경로), 목록 화면이면 null */
+  path: string | null
+  /** 변경 조각, 처음 불러오는 중이면 null */
+  diff: DiffParts | null
+  /** 수정 요청 입력칸을 연 조각 순번 */
+  asking: number | null
+  /** 마지막으로 보낸 요청 문구 */
+  sent: string | null
+}
+
+/** 파일 상세 화면의 선택 파일, 변경 조각, 수정 요청 입력과 전송 */
+export function createFileDetail(deps: {
+  getHost: () => Host | null
+  /** 파일 하나의 HEAD 대비 변경 내용, 변경 없으면 null */
+  changeOf: (rel: string) => Promise<FileChange | null>
+  /** 화면 갱신 요청 */
+  onChange: () => void
+}) {
+  let path: string | null = null
+  let diff: DiffParts | null = null
+  let asking: number | null = null
+  let sent: string | null = null
+  /** 보낸 요청 문구와 그 요청에 붙일 맥락, prompt.submit 에서 꺼냄 */
+  const contexts = new Map<string, string>()
+
+  async function load() {
+    const target = path
+    if (target === null) return
+    const change = await deps.changeOf(target).catch(() => null)
+    if (path !== target) return
+    diff = change === null ? { parts: [], omitted: null } : diffParts(change, C.DETAIL_DIFF_CHARS)
+    if (asking !== null && asking >= diff.parts.length) asking = null
+    deps.onChange()
+  }
+
+  return {
+    open(rel: string) {
+      path = rel
+      diff = null
+      asking = null
+      sent = null
+      deps.onChange()
+      void load()
+    },
+
+    close() {
+      path = null
+      diff = null
+      asking = null
+      sent = null
+    },
+
+    /** 열린 파일의 변경 조각 다시 읽기, 읽는 동안 이전 조각 유지 */
+    refresh() {
+      if (path !== null) void load()
+    },
+
+    /** 조각 하나의 수정 요청 입력칸 열기, 같은 조각이면 닫기 */
+    ask(index: number) {
+      asking = asking === index ? null : index
+      deps.onChange()
+    },
+
+    /** 입력한 수정 요청을 사용자 요청으로 보내고 조각 내용은 맥락으로 붙일 준비 */
+    send(index: number, instruction: string) {
+      const host = deps.getHost()
+      const part = diff?.parts[index]
+      if (!host || path === null || !part || !instruction.trim()) return
+      const text = editRequestText(path, part, instruction)
+      contexts.set(text, editRequestContext(path, part))
+      asking = null
+      sent = text
+      deps.onChange()
+      void host.submitPrompt(text).catch(() => {
+        contexts.delete(text)
+        sent = null
+        deps.onChange()
+      })
+    },
+
+    /** 보낸 수정 요청이면 붙일 맥락을 꺼냄, 아니면 null */
+    takeContext(text: string): string | null {
+      const context = contexts.get(text) ?? null
+      contexts.delete(text)
+      return context
+    },
+
+    view: (): FileDetailView => ({ path, diff, asking, sent }),
+  }
+}

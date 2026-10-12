@@ -16,6 +16,7 @@ export function createStatusLine(deps: { getHost: () => Host | null }) {
       model: showModel ? model : null,
       effort: showModel ? effort : null,
       rateLimits,
+      now: Date.now(),
     })
     host.status(text || undefined)
   }

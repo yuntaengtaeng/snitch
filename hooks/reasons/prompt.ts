@@ -1,7 +1,14 @@
 /** 변경 이유 요약 요청 프롬프트와 응답 해석 */
 
-/** 변경 이유를 물을 파일 하나의 레포 기준 경로와 HEAD 대비 변경 내용 */
+import type { FileChange } from '../work-files/git'
+
+/** 변경 이유를 물을 파일 하나의 레포 기준 경로와 이번 턴의 변경 내용 */
 export type ChangedFile = { path: string; diff: string }
+
+/** 프롬프트에 넣을 변경 내용, 새 파일은 표시를 붙인 전체 내용 */
+export function changeText(change: FileChange): string {
+  return change.isNew ? `(새 파일)\n${change.text}` : change.text
+}
 
 export const REASON_SYSTEM = [
   '너는 코드 리뷰어를 돕는 요약가다. 각 파일을 왜 바꿨는지 짧은 명사구 한 줄로 적는다.',

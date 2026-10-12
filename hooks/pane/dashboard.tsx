@@ -3,8 +3,8 @@ import type { Elements, RenderChildren } from 'claude-code'
 import * as R from '../agents/roster'
 import type { AgentsView } from '../agents/tracker'
 import * as C from '../config'
-import { fileUrl, splitPath } from '../paths'
-import type { ReasonsView } from '../reasons/tracker'
+import { splitPath } from '../paths'
+import { latestReason, type ReasonsView } from '../reasons/tracker'
 import { limitGauge, type LimitGauge, type RateLimit } from '../status-line/text'
 import type { WorkFilesView } from '../work-files/tracker'
 import * as V from '../work-files/view'
@@ -17,7 +17,7 @@ export type DashboardView = {
   limits: readonly RateLimit[]
 }
 
-type Ui = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Link'>
+type Ui = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Button'>
 
 const STATE_COLOR: Record<R.AgentState, 'inactive' | 'warning' | 'success' | 'error'> = {
   waiting: 'inactive',
@@ -35,16 +35,17 @@ const GAUGE_COLOR: Record<LimitGauge['level'], 'success' | 'warning' | 'error'> 
 }
 
 function gaugesOf(view: DashboardView): LimitGauge[] {
-  return view.limits.map(l => limitGauge(l, C.LIMIT_BAR_SEGMENTS))
+  const now = Date.now()
+  return view.limits.map(l => limitGauge(l, C.LIMIT_BAR_SEGMENTS, now))
 }
 
 /** 파일 하나의 변경 이유와 위치, 요약 중이면 요약 중 문구 */
 function noteOf(view: DashboardView, path: string): V.FileNote & { isExplaining: boolean } {
-  const { reasons, explaining } = view.reasons
+  const latest = latestReason(view.reasons, path)
   const editorId = view.files.editedBy.get(path)
-  const isExplaining = !reasons.has(path) && explaining.has(path)
+  const isExplaining = latest === undefined && view.reasons.explaining.has(path)
   return {
-    reason: reasons.get(path) ?? (isExplaining ? EXPLAINING_TEXT : undefined),
+    reason: latest ?? (isExplaining ? EXPLAINING_TEXT : undefined),
     place: V.placeOf(path, editorId ? view.agents.taskOf(editorId) : ''),
     isExplaining,
   }
@@ -57,7 +58,9 @@ function showsAgents(view: DashboardView): boolean {
 
 /** /snitch text 와 좁은 화면용 텍스트 버전 */
 export function dashboardText(view: DashboardView): string {
-  const limits = gaugesOf(view).map(g => `${g.label} ${g.remaining}% 남음`).join(', ')
+  const limits = gaugesOf(view)
+    .map(g => `${g.label} ${g.remaining}% 남음${g.reset ? `, ${g.reset} 초기화` : ''}`)
+    .join(', ')
   const header = limits
   const agents = showsAgents(view) ? R.agentsText(view.agents.agents, view.agents.now) : ''
   const files = V.filesText(view.files.commits, view.files.current, path => noteOf(view, path))
@@ -75,12 +78,14 @@ export function dashboardRows(view: DashboardView): number {
   return Math.min(rows, C.PANE_MAX_ROWS)
 }
 
-/** 에이전트, 변경 파일, 커밋 구역으로 된 대시보드 패널 */
-export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
-  const { Box, Text, Link } = ui
+/** 에이전트, 변경 파일, 커밋 구역으로 된 대시보드 패널, 파일 행을 누르면 상세 화면 */
+export function renderDashboard(ui: Ui, view: DashboardView, width: number, actions: { openFile: (path: string) => void }) {
+  const { Box, Text, Button } = ui
   const { agents, files } = view
-  const { repoRoot, commits, current } = files
+  const { commits, current } = files
   const all = V.totalsOf(current)
+  /** 제목 줄에 한도 초기화 시각을 붙일 만큼 넓은지 여부 */
+  const showsReset = width >= C.RESET_MIN_COLUMNS
 
   /** +추가 −삭제, 0 이거나 dim 이면 흐리게 */
   const stat = (f: { added: number | null; deleted: number | null }, dim = false) =>
@@ -152,25 +157,31 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
     const name = splitPath(f.path).name
     const letter = V.statusLetter(f)
     const { reason, place, isExplaining } = noteOf(view, f.path)
+    const reasonCount = view.reasons.history.get(f.path)?.length ?? 0
     return (
       <Box key={`f-${f.path}`} flexDirection="column">
         {row(
           `fr-${f.path}`,
-          <Text wrap="truncate-end">
+          <Button key={`open:${f.path}`} plain onPress={() => actions.openFile(f.path)}>
             <Text color={letter === 'A' ? 'success' : 'inactive'}>{letter}</Text>
             <Text> </Text>
-            {repoRoot && C.PANE_FILE_LINKS ? (
-              <Link href={fileUrl(repoRoot, f.path)}>
-                <Text bold>{name}</Text>
-              </Link>
-            ) : (
-              <Text bold>{name}</Text>
-            )}
+            <Text bold>{name}</Text>
             {f.otherSessions ? <Text color="warning">{`  ${V.CONFLICT_LABEL}`}</Text> : <Text />}
-          </Text>,
+          </Button>,
           stat(f),
         )}
-        {reason ? detail(`fn-${f.path}`, reason, isExplaining ? 'inactive' : undefined, isExplaining) : <Text />}
+        {reason ? (
+          <Box key={`fn-${f.path}`} paddingLeft={2}>
+            <Text wrap="truncate-end">
+              <Text color={isExplaining ? 'inactive' : undefined} italic={isExplaining}>
+                {reason}
+              </Text>
+              <Text color="inactive">{reasonCount > 1 ? `  이력 ${reasonCount}` : ''}</Text>
+            </Text>
+          </Box>
+        ) : (
+          <Text />
+        )}
         {place ? detail(`fp-${f.path}`, place, 'inactive') : <Text />}
       </Box>
     )
@@ -195,6 +206,7 @@ export function renderDashboard(ui: Ui, view: DashboardView, width: number) {
               <Text color="inactive">{`${i > 0 ? '  ' : ''}${g.label} `}</Text>
               <Text color={GAUGE_COLOR[g.level]}>{g.bar}</Text>
               <Text color="inactive">{` ${g.remaining}%`}</Text>
+              <Text color="subtle">{showsReset && g.reset ? ` ${g.reset}` : ''}</Text>
             </Text>
           ))}
         </Text>,

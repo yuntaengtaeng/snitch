@@ -3,9 +3,13 @@ import type { EngineInterface, On } from 'claude-code'
 import { MAIN_ID } from './agents/roster'
 import { createAgents } from './agents/tracker'
 import * as C from './config'
+import { createFileDetail } from './file-detail/tracker'
 import type { Host } from './host'
 import { dashboardRows, dashboardText, renderDashboard, type DashboardView } from './pane/dashboard'
+import { askKey, renderFileDetail } from './pane/detail'
+import { fileUrl } from './paths'
 import { isUserRequest } from './prompt-origin'
+import { historyText } from './reasons/history'
 import { NOTE_PROMPT, NOTE_TOOL_SPEC, parseNotes } from './reasons/note-tool'
 import { createReasons } from './reasons/tracker'
 import { createStatusLine } from './status-line/tracker'
@@ -33,6 +37,15 @@ function createHost($: EngineInterface): Host {
         columns: C.PANE_DOCK_COLUMNS,
       }),
     closePane: () => $.ui.close({ id: C.PANE_ID }),
+    scrollPaneTop: async () => {
+      await $.ui.scroll({ in: C.PANE_ID, to: 'start' })
+    },
+    focusPane: async key => {
+      await $.ui.focus({ requestId: C.PANE_ID, key })
+    },
+    submitPrompt: async text => {
+      await $.prompt.submit({ text, asUser: true })
+    },
     paneState: async () => {
       const pane = (await $.ui.panes()).find(p => p.id === C.PANE_ID)
       return {
@@ -72,12 +85,27 @@ export function register(on: On) {
 
   const workFiles = createWorkFiles({
     getHost,
-    onChange: redraw,
+    onChange: () => {
+      fileDetail.refresh()
+      redraw()
+    },
     onCommitted: paths => reasons.forget(paths),
   })
-  const reasons = createReasons({ getHost, changeOf: rel => workFiles.changeOf(rel), onChange: redraw })
+  const reasons = createReasons({
+    getHost,
+    changeSince: (rel, blob) => workFiles.changeSince(rel, blob),
+    snapshot: rel => workFiles.snapshot(rel),
+    onChange: redraw,
+  })
+  const fileDetail = createFileDetail({ getHost, changeOf: rel => workFiles.changeOf(rel), onChange: redraw })
   const agents = createAgents({ getHost, onChange: redraw })
   const statusLine = createStatusLine({ getHost })
+
+  /** 이름이나 경로 끝부분으로 찾은 변경 파일의 레포 기준 경로 */
+  const findFile = (query: string): string | null => {
+    const paths = [...new Set([...workFiles.view().current.map(f => f.path), ...reasons.view().history.keys()])]
+    return paths.find(p => p === query) ?? paths.find(p => p.endsWith(`/${query}`)) ?? null
+  }
 
   const dashboard = (): DashboardView => ({
     agents: agents.view(),
@@ -85,6 +113,27 @@ export function register(on: On) {
     reasons: reasons.view(),
     limits: statusLine.limits(),
   })
+
+  /** 패널을 파일 상세 화면으로 전환 */
+  const openFile = (path: string) => {
+    fileDetail.open(path)
+    void host?.openPane(C.PANE_MAX_ROWS).catch(() => undefined)
+    void host?.scrollPaneTop().catch(() => undefined)
+  }
+
+  /** 파일 상세 화면에서 목록으로 복귀 */
+  const backToList = () => {
+    fileDetail.close()
+    redraw()
+    void host?.openPane(dashboardRows(dashboard())).catch(() => undefined)
+    void host?.scrollPaneTop().catch(() => undefined)
+  }
+
+  /** 수정 요청 입력칸을 열고 포커스 이동 */
+  const askPart = (index: number) => {
+    fileDetail.ask(index)
+    if (fileDetail.view().asking === index) void host?.focusPane(askKey(index)).catch(() => undefined)
+  }
 
   on('session.start', async ($, e, next) => {
     host = createHost($)
@@ -94,6 +143,7 @@ export function register(on: On) {
 
     statusLine.start()
     reasons.clear()
+    fileDetail.close()
     await agents.clear()
     await workFiles.start(e.cwd, sid)
 
@@ -116,8 +166,8 @@ export function register(on: On) {
         await $.command
           .register({
             name,
-            description: '에이전트 현황과 변경 파일 대시보드, text 는 텍스트 출력, why 는 변경 이유 다시 요약',
-            argumentHint: '[text|why]',
+            description: '에이전트 현황과 변경 파일 대시보드, text 는 텍스트 출력, why 는 변경 이유 다시 요약, why 파일은 그 파일의 이유 이력',
+            argumentHint: '[text|why [파일]]',
             immediate: true,
           })
           .catch(() => undefined)
@@ -133,6 +183,7 @@ export function register(on: On) {
     const r = await next(e)
     await workFiles.clear()
     reasons.clear()
+    fileDetail.close()
     await agents.clear()
     redraw()
     return r
@@ -146,8 +197,14 @@ export function register(on: On) {
     return yield* next(e)
   })
 
-  /** 사용자가 직접 보낸 요청이면 변경 이유의 근거로 기록하고 다음 턴을 새 요청으로 표시 */
+  /** 사용자가 직접 보낸 요청이면 변경 이유의 근거로 기록하고 다음 턴을 새 요청으로 표시, 파일 상세의 수정 요청은 변경 조각을 맥락으로 첨부 */
   on('prompt.submit', async ($, e, next) => {
+    const partContext = fileDetail.takeContext(e.text)
+    if (partContext !== null) {
+      reasons.noteRequest(e.text)
+      isNextTurnUserRequest = true
+      return next({ ...e, context: [...(e.context ?? []), partContext] })
+    }
     if (isUserRequest(e.origin.kind)) {
       reasons.noteRequest(e.text)
       isNextTurnUserRequest = true
@@ -195,7 +252,7 @@ export function register(on: On) {
   })
 
   on('session.measure', async ($, e, next) => {
-    statusLine.measured(e.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })))
+    statusLine.measured(e.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt })))
     redraw()
     return next(e)
   })
@@ -227,6 +284,12 @@ export function register(on: On) {
     }
     await workFiles.refresh()
     const arg = e.args.trim()
+
+    if (arg.startsWith('why ')) {
+      const path = findFile(arg.slice(4).trim())
+      if (path === null) return { text: `변경 파일에서 ${arg.slice(4).trim()} 찾지 못함` }
+      return { text: historyText(path, reasons.view().history.get(path) ?? []) }
+    }
 
     if (arg === 'why') {
       const paths = workFiles.view().current.map(f => f.path)
@@ -267,13 +330,33 @@ export function register(on: On) {
     return next(e)
   })
 
+  /** 상세 화면에서 Esc 는 목록으로 복귀, 그 외 닫기는 패널 닫음 */
   on('ui.close', { id: C.PANE_ID }, ($, e, next) => {
+    if (e.origin.kind === 'person' && fileDetail.view().path !== null) {
+      backToList()
+      return { value: undefined }
+    }
+    fileDetail.close()
     isPaneOpen = false
     return next(e)
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== C.PANE_ID) return next(e)
-    return renderDashboard($.ui.resolve(e), dashboard(), Math.max(20, e.props.bodyColumns))
+    const width = Math.max(20, e.props.bodyColumns)
+    const detail = fileDetail.view()
+    const { path } = detail
+    if (path === null) return renderDashboard($.ui.resolve(e), dashboard(), width, { openFile })
+
+    const { repoRoot, current } = workFiles.view()
+    return renderFileDetail(
+      $.ui.resolve(e),
+      { ...detail, path },
+      reasons.view().history.get(path) ?? [],
+      current.find(f => f.path === path),
+      repoRoot && C.PANE_FILE_LINKS ? fileUrl(repoRoot, path) : undefined,
+      width,
+      { back: backToList, ask: askPart, send: (index, text) => fileDetail.send(index, text) },
+    )
   })
 }

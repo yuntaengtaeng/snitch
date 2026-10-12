@@ -1,6 +1,11 @@
 /** 상태줄 문구 */
 
-export type RateLimit = { kind: string; percentUsed: number }
+export type RateLimit = {
+  kind: string
+  percentUsed: number
+  /** 한도 초기화 시각, ISO 8601 */
+  resetsAt?: string
+}
 
 const LIMIT_LABEL: Record<string, string> = {
   five_hour: '5h',
@@ -23,17 +28,33 @@ export function remainingPercent(limit: RateLimit): number {
   return Math.min(100, Math.max(0, Math.round(100 - limit.percentUsed)))
 }
 
-/** 상태줄 문자열, 모델과 effort, 남은 한도 */
+const HOUR_MS = 3_600_000
+
+/** 한도 초기화 시각 표시, 하루 안이면 시:분, 그 뒤면 월/일, 시각이 없거나 지났으면 빈 문자열 */
+export function resetText(resetsAt: string | undefined, now: number): string {
+  if (!resetsAt) return ''
+  const at = new Date(resetsAt)
+  const ms = at.getTime()
+  if (Number.isNaN(ms) || ms <= now) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return ms - now < 24 * HOUR_MS ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : `${at.getMonth() + 1}/${at.getDate()}`
+}
+
+/** 상태줄 문자열, 모델과 effort, 남은 한도와 초기화 시각 */
 export function statusText(input: {
   model?: string | null
   effort?: string | null
   rateLimits: readonly RateLimit[]
+  now: number
 }): string {
   const parts: string[] = []
   if (input.model) parts.push([shortModelName(input.model), input.effort].filter(Boolean).join(' '))
 
   const limits = input.rateLimits
-    .map(r => `${LIMIT_LABEL[r.kind] ?? r.kind} ${remainingPercent(r)}%`)
+    .map(r => {
+      const reset = resetText(r.resetsAt, input.now)
+      return `${LIMIT_LABEL[r.kind] ?? r.kind} ${remainingPercent(r)}%${reset ? ` ${reset} 초기화` : ''}`
+    })
     .join(', ')
   if (limits) parts.push(`남은 한도 ${limits}`)
 
@@ -48,10 +69,12 @@ export type LimitGauge = {
   /** 남은 만큼 채운 막대 */
   bar: string
   level: 'plenty' | 'half' | 'low'
+  /** 초기화 시각, 모르면 빈 문자열 */
+  reset: string
 }
 
 /** 사용률을 남은 한도 막대로 바꾼 값, segments 는 막대 칸 수 */
-export function limitGauge(limit: RateLimit, segments: number): LimitGauge {
+export function limitGauge(limit: RateLimit, segments: number, now: number): LimitGauge {
   const remaining = remainingPercent(limit)
   const filled = Math.round((remaining / 100) * segments)
   return {
@@ -59,5 +82,6 @@ export function limitGauge(limit: RateLimit, segments: number): LimitGauge {
     remaining,
     bar: '▰'.repeat(filled) + '▱'.repeat(segments - filled),
     level: remaining < 20 ? 'low' : remaining < 50 ? 'half' : 'plenty',
+    reset: resetText(limit.resetsAt, now),
   }
 }

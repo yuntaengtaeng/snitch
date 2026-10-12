@@ -2,7 +2,7 @@ import * as C from '../config'
 import type { Host } from '../host'
 import * as P from '../paths'
 import { editKey, otherSessionsByFile } from './conflicts'
-import { mentionsGitCommit, parseCommitHeader, parseNumstat, type CommitEntry, type FileStat } from './git'
+import { mentionsGitCommit, parseCommitHeader, parseNumstat, type CommitEntry, type FileChange, type FileStat } from './git'
 
 export type WorkFilesView = {
   repoRoot: string | null
@@ -141,6 +141,23 @@ export function createWorkFiles(deps: {
     deps.onChange()
   }
 
+  /** 파일 하나의 HEAD 대비 변경 내용, 변경 없으면 null */
+  async function changeOf(rel: string): Promise<FileChange | null> {
+    const diff = await git(['diff', '--no-renames', 'HEAD', '--', rel])
+    if (diff && diff.exitCode === 0 && diff.stdout.trim()) return { isNew: false, text: diff.stdout }
+    const untracked = await git(['ls-files', '--others', '--exclude-standard', '--', rel])
+    const host = deps.getHost()
+    if (!host || !repoRoot || !untracked || !untracked.stdout.trim()) return null
+    const text = await host.readFile(`${repoRoot}/${rel}`).catch(() => null)
+    return text === null ? null : { isNew: true, text }
+  }
+
+  async function snapshot(rel: string): Promise<string | null> {
+    if (!repoRoot) return null
+    const r = await git(['hash-object', '-w', '--', `${repoRoot}/${rel}`])
+    return r && r.exitCode === 0 ? r.stdout.trim() || null : null
+  }
+
   /** HEAD 가 바뀌었으면 새 커밋 기록과 커밋된 파일의 tracked 제외 */
   async function recordCommitIfAny() {
     const next = await readHead()
@@ -212,15 +229,18 @@ export function createWorkFiles(deps: {
       else if (tracked.length > 0) await refresh()
     },
 
-    /** 파일 하나의 HEAD 대비 변경 내용, 새 파일은 전체 내용, 변경 없으면 null */
-    async changeOf(rel: string): Promise<string | null> {
-      const diff = await git(['diff', '--no-renames', 'HEAD', '--', rel])
-      if (diff && diff.exitCode === 0 && diff.stdout.trim()) return diff.stdout
-      const untracked = await git(['ls-files', '--others', '--exclude-standard', '--', rel])
-      const host = deps.getHost()
-      if (!host || !repoRoot || !untracked || !untracked.stdout.trim()) return null
-      const text = await host.readFile(`${repoRoot}/${rel}`).catch(() => null)
-      return text === null ? null : `(새 파일)\n${text}`
+    changeOf,
+
+    /** 지금 파일 내용을 git 객체로 저장한 blob id, 파일이 없으면 null */
+    snapshot,
+
+    /** snapshot 이후 바뀐 내용, snapshot 이 없거나 파일이 사라졌으면 HEAD 대비 변경 내용 */
+    async changeSince(rel: string, blob: string | null): Promise<FileChange | null> {
+      const now = blob === null ? null : await snapshot(rel)
+      if (blob === null || now === null) return changeOf(rel)
+      if (now === blob) return null
+      const diff = await git(['diff', blob, now])
+      return diff && diff.exitCode === 0 && diff.stdout.trim() ? { isNew: false, text: diff.stdout } : null
     },
 
     hasTracked: () => tracked.length > 0,

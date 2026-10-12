@@ -12,6 +12,12 @@ export type Host = {
   /** 패널 열기, 사용자가 열지 않은 패널은 좁은 화면이면 배치 대기 */
   openPane: (rows: number) => Promise<{ isPlaced: boolean }>
   closePane: () => Promise<void>
+  /** 패널 본문을 맨 위로 스크롤 */
+  scrollPaneTop: () => Promise<void>
+  /** 패널 안의 입력칸이나 버튼으로 포커스 이동 */
+  focusPane: (key: string) => Promise<void>
+  /** 사용자 말투로 프롬프트 전송, 진행 중인 응답이 있으면 끝난 뒤 실행 */
+  submitPrompt: (text: string) => Promise<void>
   paneState: () => Promise<{ isOpen: boolean; isPlaced: boolean; isShown: boolean }>
   every: (ms: number, fn: () => void) => { cancel: () => void }
   /** REASON_MODEL 의 답 텍스트, 답이 없으면 null */

@@ -13,6 +13,9 @@ export type FileStat = {
   otherSessions?: number
 }
 
+/** 파일 하나의 변경 내용, 새 파일은 전체 내용, 그 외는 unified diff */
+export type FileChange = { isNew: boolean; text: string }
+
 export type CommitEntry = {
   hash: string
   subject: string
