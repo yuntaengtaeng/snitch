@@ -1,3 +1,5 @@
+import type { RenderSurface } from 'claude-code'
+
 /** hook 밖에서 이어지는 비동기 작업이 쓰는 $ 함수 */
 export type Host = {
   run: (argv: string[]) => Promise<{ exitCode: number; stdout: string; stderr: string }>
@@ -18,6 +20,8 @@ export type Host = {
   focusPane: (key: string) => Promise<void>
   /** 사용자 말투로 프롬프트 전송, 진행 중인 응답이 있으면 끝난 뒤 실행 */
   submitPrompt: (text: string) => Promise<void>
+  /** 버튼을 누른 화면의 클립보드에 복사, 복사됐는지 반환 */
+  copy: (text: string, surface: RenderSurface) => Promise<boolean>
   paneState: () => Promise<{ isOpen: boolean; isPlaced: boolean; isShown: boolean }>
   every: (ms: number, fn: () => void) => { cancel: () => void }
   /** REASON_MODEL 의 답 텍스트, 답이 없으면 null */

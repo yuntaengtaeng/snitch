@@ -1,16 +1,17 @@
-import type { Elements } from 'claude-code'
+import type { Elements, RenderSurface } from 'claude-code'
 
 import type { BoardView } from '../board/tracker'
 import * as BV from '../board/view'
 
 /** 보드 구역을 그리는 부품, 모바일은 Input 이 없어 직접 답하기를 숨김 */
-export type BoardUi = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Button' | 'Link'> &
+export type BoardUi = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Button'> &
   Partial<Pick<Elements['terminal'], 'Input'>>
 
 export type BoardActions = {
   answer: (id: string, value: string) => void
   toggleAnswering: (id: string) => void
   clearLinks: () => void
+  copyLink: (href: string, surface: RenderSurface) => void
 }
 
 /** 직접 답하기 입력칸의 요소 주소 */
@@ -23,8 +24,8 @@ const TODO_BAR_SEGMENTS = 6
 
 /** 결정 카드, 할 일, 링크 구역, 비어 있는 구역은 그리지 않음 */
 export function renderBoard(ui: BoardUi, view: BoardView, actions: BoardActions) {
-  const { Box, Text, Button, Link, Input } = ui
-  const { board, answering } = view
+  const { Box, Text, Button, Input } = ui
+  const { board, answering, copied } = view
   const open = BV.openTodos(board.todos)
   const done = BV.doneCount(board.todos)
 
@@ -125,12 +126,18 @@ export function renderBoard(ui: BoardUi, view: BoardView, actions: BoardActions)
           <Button key="clear-links" label="지우기" plain dimColor onPress={actions.clearLinks} />
         </Box>
         {board.links.map(p => (
-          <Text key={`l-${p.href}`} wrap="truncate-end">
-            <Text color="inactive">{'  '}</Text>
-            <Link href={p.href}>
-              <Text>{p.label}</Text>
-            </Link>
-          </Text>
+          <Box key={`l-${p.href}`} flexDirection="row" paddingLeft={2}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Button key={`copy-${p.href}`} plain onPress={press => actions.copyLink(p.href, press.surface)}>
+                <Text wrap="truncate-end">{p.label}</Text>
+              </Button>
+            </Box>
+            {copied?.href === p.href ? (
+              <Text color={copied.isCopied ? 'success' : 'error'}>{copied.isCopied ? ' 주소 복사함' : ' 복사 실패'}</Text>
+            ) : (
+              <Text color="inactive">{' 복사'}</Text>
+            )}
+          </Box>
         ))}
       </Box>
     )

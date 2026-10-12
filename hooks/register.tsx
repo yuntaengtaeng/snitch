@@ -51,6 +51,7 @@ function createHost($: EngineInterface): Host {
     submitPrompt: async text => {
       await $.prompt.submit({ text, asUser: true })
     },
+    copy: async (text, surface) => (await $.ui.copy({ text, surface })).isCopied,
     paneState: async () => {
       const pane = (await $.ui.panes()).find(p => p.id === C.PANE_ID)
       return {
@@ -431,6 +432,7 @@ export function register(on: On) {
         answer: (id, value) => board.answer(id, value),
         toggleAnswering,
         clearLinks: () => board.clearLinks(),
+        copyLink: (href, surface) => board.copyLink(href, surface),
       })
     }
 

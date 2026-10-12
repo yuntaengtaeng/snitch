@@ -49,7 +49,7 @@ Decisions, todos and links stay pinned to the top of the pane so they don't scro
 
 - **Decisions** (결정 필요): questions Claude needs you to answer. Press an option button or **Answer myself** (직접 답하기); your answer is sent as your prompt and Claude closes the decision.
 - **Todos** (할 일): multi-step work Claude registers, with the item in progress and the done count.
-- **Links** (링크): only links to things Claude made in this session, such as PRs, deploy URLs and artifacts.
+- **Links** (링크): only links to things Claude made in this session, such as PRs, deploy URLs and artifacts. Press one to copy its full address.
 
 The board is also passed to Claude on every request, so Claude doesn't forget open decisions and todos either.
 
@@ -138,7 +138,6 @@ For Haiku summaries, your request, Claude's reply and the diffs of changed files
 - The dashboard pane doesn't work outside a git repository.
 - The other-session warning only works between sessions on the same machine and folder.
 - While the prompt has focus, the first press on a pane button may take two clicks.
-- If a link shows as `name https://...`, cut off, and opens a truncated address, Claude Code didn't detect hyperlink support in your terminal. Set `FORCE_HYPERLINK=1` before starting Claude Code (seen in Git Bash inside VS Code on Windows).
 - The mods API is in early access, so behavior may change with Claude Code updates.
 
 ## Development
