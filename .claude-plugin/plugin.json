@@ -1,6 +1,6 @@
 {
   "name": "snitch",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Claude가 한 일을 전부 일러바치는 Claude Code mod: 상태줄(모델, effort, 요금제 한도, 세션 작업량), 대시보드 패널(/snitch, 에이전트 현황, 변경 파일별 변경 이유, 커밋별 누적, 전체화면이면 우측에 자동 표시)",
   "license": "MIT",
   "author": {
