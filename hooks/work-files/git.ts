@@ -40,6 +40,24 @@ export function parseNumstat(stdout: string): FileStat[] {
   return stats
 }
 
+/** 추적 파일을 HEAD 대비 변경 있는 파일(추적 순서)과 HEAD 와 같아진 파일로 나눔, Windows 는 대소문자 무시 */
+export function matchTracked(
+  paths: readonly string[],
+  stats: readonly FileStat[],
+  isWindows: boolean,
+): { changed: FileStat[]; clean: string[] } {
+  const keyOf = (p: string) => (isWindows ? p.toLowerCase() : p)
+  const byKey = new Map(stats.map(s => [keyOf(s.path), s]))
+  const changed: FileStat[] = []
+  const clean: string[] = []
+  for (const path of paths) {
+    const s = byKey.get(keyOf(path))
+    if (s) changed.push({ ...s, path })
+    else clean.push(path)
+  }
+  return { changed, clean }
+}
+
 /** `git log -1 --format=%h%x00%s` 출력의 해시와 제목 */
 export function parseCommitHeader(stdout: string): { hash: string; subject: string } | null {
   const line = stdout.replace(/\n$/, '')

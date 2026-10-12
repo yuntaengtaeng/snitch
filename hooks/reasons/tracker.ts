@@ -141,7 +141,7 @@ export function createReasons(deps: {
         .catch(() => undefined)
     },
 
-    /** 커밋된 파일의 이력과 비교 기준 삭제 */
+    /** HEAD 와 같아진 파일의 이력과 비교 기준 삭제 */
     forget(paths: string[]) {
       paths.forEach(p => {
         history.delete(p)

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { diffParts, hunkRange, splitHunks } from './diff'
-import { editRequestContext, editRequestText } from './request'
+import { editRequestText } from './request'
 
 const DIFF = [
   'diff --git a/login.ts b/login.ts',
@@ -56,10 +56,8 @@ test('diffParts: hunk 가 없는 바이너리 변경은 빈 조각', () => {
   expect(diffParts({ isNew: false, text: 'Binary files a/x.png and b/x.png differ\n' }, 100).parts).toEqual([])
 })
 
-test('수정 요청: 문구 앞에 경로와 줄 범위, 맥락에는 조각 diff', () => {
+test('수정 요청: 문구 앞에 경로와 줄 범위', () => {
   const part = diffParts({ isNew: false, text: DIFF }, 10_000).parts[0]
   if (!part) throw new Error('조각 없음')
   expect(editRequestText('src/login.ts', part, '  기존 방식으로 수정해줘 ')).toBe('[src/login.ts 10-13줄] 기존 방식으로 수정해줘')
-  const context = editRequestContext('src/login.ts', part)
-  expect(context.includes('```diff\n@@ -10,3 +10,4 @@')).toBe(true)
 })

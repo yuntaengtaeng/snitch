@@ -2,7 +2,15 @@ import * as C from '../config'
 import type { Host } from '../host'
 import * as P from '../paths'
 import { editKey, otherSessionsByFile } from './conflicts'
-import { mentionsGitCommit, parseCommitHeader, parseNumstat, type CommitEntry, type FileChange, type FileStat } from './git'
+import {
+  matchTracked,
+  mentionsGitCommit,
+  parseCommitHeader,
+  parseNumstat,
+  type CommitEntry,
+  type FileChange,
+  type FileStat,
+} from './git'
 
 export type WorkFilesView = {
   repoRoot: string | null
@@ -17,8 +25,8 @@ export function createWorkFiles(deps: {
   getHost: () => Host | null
   /** 화면 갱신 요청 */
   onChange: () => void
-  /** 커밋에 포함된 파일 (레포 기준 경로) */
-  onCommitted: (paths: string[]) => void
+  /** 커밋이나 되돌리기로 HEAD 와 같아져 추적을 끝낸 파일 (레포 기준 경로) */
+  onCleaned: (paths: string[]) => void
 }) {
   let cwd = ''
   let isWindows = false
@@ -28,6 +36,9 @@ export function createWorkFiles(deps: {
   /** 마지막 커밋 이후 편집한 파일 (레포 기준 경로, 편집 순서) */
   const tracked: string[] = []
   const editedBy = new Map<string, string>()
+  /** 파일별 마지막 편집 순번, 변경량 계산 중에 다시 편집된 파일은 추적 유지 */
+  const editSeq = new Map<string, number>()
+  let seq = 0
   let commits: CommitEntry[] = []
   let current: FileStat[] = []
   let isRefreshing = false
@@ -36,6 +47,7 @@ export function createWorkFiles(deps: {
   function clearState() {
     tracked.length = 0
     editedBy.clear()
+    editSeq.clear()
     commits = []
     current = []
   }
@@ -43,7 +55,8 @@ export function createWorkFiles(deps: {
   async function git(args: string[]) {
     const host = deps.getHost()
     if (!host) return null
-    return host.run(['git', '-c', 'core.quotePath=false', ...args]).catch(() => null)
+    const at = repoRoot ? ['-C', repoRoot] : []
+    return host.run(['git', '--no-optional-locks', ...at, '-c', 'core.quotePath=false', ...args]).catch(() => null)
   }
 
   async function readHead(): Promise<string | null> {
@@ -94,32 +107,45 @@ export function createWorkFiles(deps: {
     return otherSessionsByFile(entries, repoRoot, sid, now, ttl, isWindows)
   }
 
-  /** tracked 파일의 HEAD 대비 변경량, 변경 없는 파일 제외 */
-  async function computeCurrent(): Promise<FileStat[]> {
-    if (!repoRoot || tracked.length === 0) return []
+  /** tracked 파일의 HEAD 대비 변경량과 HEAD 와 같아진 파일, git 이 실패하면 null */
+  async function computeCurrent(): Promise<{ stats: FileStat[]; clean: string[] } | null> {
+    if (!repoRoot || tracked.length === 0) return { stats: [], clean: [] }
 
     const paths = [...tracked]
     const diff = await git(['diff', '--numstat', '--no-renames', 'HEAD', '--', ...paths])
-    const byPath = new Map<string, FileStat>()
-    if (diff && diff.exitCode === 0) {
-      for (const s of parseNumstat(diff.stdout)) byPath.set(s.path, s)
-    }
+    if (!diff || diff.exitCode !== 0) return null
+    const stats = parseNumstat(diff.stdout)
 
     const others = await git(['ls-files', '--others', '--exclude-standard', '--', ...paths])
-    if (others && others.exitCode === 0) {
-      for (const rel of others.stdout.split('\n').filter(Boolean)) {
-        byPath.set(rel, { path: rel, added: await countLines(rel), deleted: 0, isNew: true })
-      }
+    if (!others || others.exitCode !== 0) return null
+    for (const rel of others.stdout.split('\n').filter(Boolean)) {
+      stats.push({ path: rel, added: await countLines(rel), deleted: 0, isNew: true })
     }
 
-    const elsewhere = await otherSessions()
+    const elsewhere = await otherSessions().catch(() => new Map<string, number>())
+    const { changed, clean } = matchTracked(paths, stats, isWindows)
+    return {
+      stats: changed.map(s => {
+        const n = elsewhere.get(isWindows ? s.path.toLowerCase() : s.path) ?? 0
+        return n > 0 ? { ...s, otherSessions: n } : s
+      }),
+      clean,
+    }
+  }
 
-    return paths.flatMap(p => {
-      const s = byPath.get(p)
-      if (!s) return []
-      const n = elsewhere.get(isWindows ? p.toLowerCase() : p) ?? 0
-      return [n > 0 ? { ...s, otherSessions: n } : s]
+  /** HEAD 와 같아진 파일을 추적에서 뺌, startSeq 뒤에 다시 편집된 파일은 유지 */
+  async function untrack(clean: string[], startSeq: number) {
+    const done = clean.filter(p => (editSeq.get(p) ?? 0) <= startSeq)
+    if (done.length === 0) return
+    const remaining = tracked.filter(p => !done.includes(p))
+    tracked.length = 0
+    tracked.push(...remaining)
+    done.forEach(p => {
+      editedBy.delete(p)
+      editSeq.delete(p)
     })
+    await forgetMyEdits(done)
+    deps.onCleaned(done)
   }
 
   /** current 재계산 후 화면 갱신, 실행 중 요청은 한 번으로 합침 */
@@ -133,7 +159,11 @@ export function createWorkFiles(deps: {
     try {
       do {
         isRefreshQueued = false
-        current = await computeCurrent()
+        const startSeq = seq
+        const next = await computeCurrent()
+        if (next === null) continue
+        current = next.stats
+        await untrack(next.clean, startSeq)
       } while (isRefreshQueued)
     } finally {
       isRefreshing = false
@@ -158,7 +188,7 @@ export function createWorkFiles(deps: {
     return r && r.exitCode === 0 ? r.stdout.trim() || null : null
   }
 
-  /** HEAD 가 바뀌었으면 새 커밋 기록과 커밋된 파일의 tracked 제외 */
+  /** HEAD 가 바뀌었으면 새 커밋 기록, 커밋된 파일은 refresh 에서 추적 종료 */
   async function recordCommitIfAny() {
     const next = await readHead()
     if (next === null || next === head) {
@@ -173,14 +203,6 @@ export function createWorkFiles(deps: {
     const files = show && show.exitCode === 0 ? parseNumstat(show.stdout) : []
 
     commits = [...commits, { hash: parsed?.hash ?? next, subject: parsed?.subject ?? '', files }]
-
-    const committed = files.map(f => f.path)
-    deps.onCommitted(committed)
-    await forgetMyEdits(tracked.filter(p => committed.includes(p)))
-    const remaining = tracked.filter(p => !committed.includes(p))
-    tracked.length = 0
-    tracked.push(...remaining)
-
     await refresh()
   }
 
@@ -217,6 +239,7 @@ export function createWorkFiles(deps: {
       if (rel === null) return null
       if (!tracked.includes(rel)) tracked.push(rel)
       editedBy.set(rel, agentId)
+      editSeq.set(rel, ++seq)
       void recordMyEdit(rel)
         .then(() => refresh())
         .catch(() => undefined)

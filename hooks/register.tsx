@@ -89,7 +89,7 @@ export function register(on: On) {
       fileDetail.refresh()
       redraw()
     },
-    onCommitted: paths => reasons.forget(paths),
+    onCleaned: paths => reasons.forget(paths),
   })
   const reasons = createReasons({
     getHost,
@@ -97,7 +97,15 @@ export function register(on: On) {
     snapshot: rel => workFiles.snapshot(rel),
     onChange: redraw,
   })
-  const fileDetail = createFileDetail({ getHost, changeOf: rel => workFiles.changeOf(rel), onChange: redraw })
+  const fileDetail = createFileDetail({
+    getHost,
+    changeOf: rel => workFiles.changeOf(rel),
+    onSent: text => {
+      reasons.noteRequest(text)
+      isNextTurnUserRequest = true
+    },
+    onChange: redraw,
+  })
   const agents = createAgents({ getHost, onChange: redraw })
   const statusLine = createStatusLine({ getHost })
 
@@ -197,14 +205,8 @@ export function register(on: On) {
     return yield* next(e)
   })
 
-  /** 사용자가 직접 보낸 요청이면 변경 이유의 근거로 기록하고 다음 턴을 새 요청으로 표시, 파일 상세의 수정 요청은 변경 조각을 맥락으로 첨부 */
+  /** 사용자가 직접 보낸 요청이면 변경 이유의 근거로 기록하고 다음 턴을 새 요청으로 표시 */
   on('prompt.submit', async ($, e, next) => {
-    const partContext = fileDetail.takeContext(e.text)
-    if (partContext !== null) {
-      reasons.noteRequest(e.text)
-      isNextTurnUserRequest = true
-      return next({ ...e, context: [...(e.context ?? []), partContext] })
-    }
     if (isUserRequest(e.origin.kind)) {
       reasons.noteRequest(e.text)
       isNextTurnUserRequest = true
@@ -212,8 +214,9 @@ export function register(on: On) {
     return next(e)
   })
 
-  /** 메인 대화 턴 시작, 새 요청이면 끝난 서브에이전트 정리 */
+  /** 메인 대화 턴 시작, 새 요청이면 끝난 서브에이전트 정리, 사용자가 직접 커밋한 파일 반영 */
   on('turn.start', async ($, e, next) => {
+    if (workFiles.hasTracked()) void workFiles.refresh().catch(() => undefined)
     await agents.turnStarted(isNextTurnUserRequest)
     isNextTurnUserRequest = false
     return next(e)

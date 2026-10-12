@@ -2,7 +2,7 @@ import * as C from '../config'
 import type { Host } from '../host'
 import type { FileChange } from '../work-files/git'
 import { diffParts, type DiffParts } from './diff'
-import { editRequestContext, editRequestText } from './request'
+import { editRequestText } from './request'
 
 export type FileDetailView = {
   /** 상세 화면으로 연 파일 (레포 기준 경로), 목록 화면이면 null */
@@ -20,6 +20,8 @@ export function createFileDetail(deps: {
   getHost: () => Host | null
   /** 파일 하나의 HEAD 대비 변경 내용, 변경 없으면 null */
   changeOf: (rel: string) => Promise<FileChange | null>
+  /** 수정 요청을 보내기 직전, 변경 이유의 근거 요청으로 기록 */
+  onSent: (text: string) => void
   /** 화면 갱신 요청 */
   onChange: () => void
 }) {
@@ -27,8 +29,6 @@ export function createFileDetail(deps: {
   let diff: DiffParts | null = null
   let asking: number | null = null
   let sent: string | null = null
-  /** 보낸 요청 문구와 그 요청에 붙일 맥락, prompt.submit 에서 꺼냄 */
-  const contexts = new Map<string, string>()
 
   async function load() {
     const target = path
@@ -68,28 +68,20 @@ export function createFileDetail(deps: {
       deps.onChange()
     },
 
-    /** 입력한 수정 요청을 사용자 요청으로 보내고 조각 내용은 맥락으로 붙일 준비 */
+    /** 입력한 수정 요청을 경로와 줄 범위를 붙여 사용자 요청으로 전송 */
     send(index: number, instruction: string) {
       const host = deps.getHost()
       const part = diff?.parts[index]
       if (!host || path === null || !part || !instruction.trim()) return
       const text = editRequestText(path, part, instruction)
-      contexts.set(text, editRequestContext(path, part))
+      deps.onSent(text)
       asking = null
       sent = text
       deps.onChange()
       void host.submitPrompt(text).catch(() => {
-        contexts.delete(text)
         sent = null
         deps.onChange()
       })
-    },
-
-    /** 보낸 수정 요청이면 붙일 맥락을 꺼냄, 아니면 null */
-    takeContext(text: string): string | null {
-      const context = contexts.get(text) ?? null
-      contexts.delete(text)
-      return context
     },
 
     view: (): FileDetailView => ({ path, diff, asking, sent }),
