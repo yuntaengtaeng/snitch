@@ -84,7 +84,7 @@ README에 담지 않은 세부 동작과 전체 설정입니다.
 | `ENABLE.board` | `true` | 결정, 할 일, 링크를 모으는 기억할 거리 보드 |
 | `PANE_AUTO_OPEN` | `true` | 전체화면에서 패널 자동 열기 |
 | `PANE_DOCK_COLUMNS` | `56` | 우측 패널 요청 너비 |
-| `PANE_FILE_LINKS` | `false` | 파일 상세의 파일 이름을 file:// 링크로 표시 (링크를 지원하지 않는 터미널에서는 주소가 그대로 보임) |
+| `PANE_FILE_LINKS` | `false` | 파일 상세의 파일 이름을 file:// 링크로 표시 (링크를 지원하지 않는 터미널에서는 주소가 그대로 보임, `FORCE_HYPERLINK=1` 참고) |
 | `PANE_MAX_ROWS` | `30` | 패널을 열 때 요청하는 최대 높이(줄) |
 | `PANE_MIN_COLUMNS` | `110` | 전체화면에서 패널을 표시할 최소 너비 |
 | `PANE_BACKGROUND` | `null` | 패널 배경색 (`null`이면 테마를 따름) |

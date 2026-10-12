@@ -138,6 +138,7 @@ For Haiku summaries, your request, Claude's reply and the diffs of changed files
 - The dashboard pane doesn't work outside a git repository.
 - The other-session warning only works between sessions on the same machine and folder.
 - While the prompt has focus, the first press on a pane button may take two clicks.
+- If a link shows as `name https://...`, cut off, and opens a truncated address, Claude Code didn't detect hyperlink support in your terminal. Set `FORCE_HYPERLINK=1` before starting Claude Code (seen in Git Bash inside VS Code on Windows).
 - The mods API is in early access, so behavior may change with Claude Code updates.
 
 ## Development
