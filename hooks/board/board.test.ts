@@ -14,7 +14,7 @@ import {
   updateSummary,
   urlPins,
 } from './board'
-import { boardText, progressBar } from './view'
+import { boardStatusParts, boardText, progressBar } from './view'
 
 test('applyUpdate: 할 일을 추가하고 진행 중은 하나만 둔다', () => {
   let board = applyUpdate(EMPTY_BOARD, { add_todos: ['README 작성', 'PR 열기'] })
@@ -106,4 +106,13 @@ test('updateSummary 와 보드 텍스트', () => {
   const board = applyUpdate(EMPTY_BOARD, { add_todos: ['a', 'b'], start_todo: 't2', open_decisions: [{ question: 'q', options: ['예', '아니요'] }] })
   expect(boardText(board)).toBe(['결정 필요 1', '  ? q', '    선택지: 예, 아니요', '', '할 일 0/2', '  ▸ b', '  ○ a'].join('\n'))
   expect(progressBar(1, 4, 4)).toBe('▰▱▱▱')
+})
+
+
+test('boardStatusParts: 할 일 진행률과 답하지 않은 결정 수만 보여 준다', () => {
+  let board = applyUpdate(EMPTY_BOARD, { add_todos: ['a', 'b', 'c'], open_decisions: [{ question: 'A?' }, { question: 'B?' }] })
+  board = applyUpdate(board, { done_todos: ['t1'] })
+  expect(boardStatusParts(board)).toEqual(['할 일 1/3', '결정 2개'])
+  expect(boardStatusParts(markAnswered(markAnswered(board, 'd1', '예'), 'd2', '예'))).toEqual(['할 일 1/3'])
+  expect(boardStatusParts(EMPTY_BOARD)).toEqual([])
 })

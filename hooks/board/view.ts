@@ -24,6 +24,15 @@ export function answeredText(d: Decision): string {
   return d.answered ? `답변 보냄, ${d.answered}` : ''
 }
 
+/** 상태줄용 보드 요약, 할 일 진행률과 답하지 않은 결정 수, 둘 다 없으면 빈 배열 */
+export function boardStatusParts(board: Board): string[] {
+  const parts: string[] = []
+  if (board.todos.length > 0) parts.push(`할 일 ${doneCount(board.todos)}/${board.todos.length}`)
+  const pending = board.decisions.filter(d => !d.answered).length
+  if (pending > 0) parts.push(`결정 ${pending}개`)
+  return parts
+}
+
 export function isBoardEmpty(board: Board): boolean {
   return board.todos.length + board.decisions.length + board.links.length === 0
 }

@@ -47,7 +47,7 @@ From the top, the pane shows things to remember, agents, changed files and commi
 
 Decisions, todos and links stay pinned to the top of the pane so they don't scroll away.
 
-- **Decisions** (결정 필요): questions Claude needs you to answer. Press an option button or **Answer myself** (직접 답하기); your answer is sent as your prompt and Claude closes the decision.
+- **Decisions** (결정 필요): questions Claude needs you to answer. Press an option button or **Answer myself** (직접 답하기); your answer is sent as your prompt and Claude closes the decision. A plain message works too.
 - **Todos** (할 일): multi-step work Claude registers, with the item in progress and the done count.
 - **Links** (링크): only links to things Claude made in this session, such as PRs, deploy URLs and artifacts. Press its name or `⧉` to copy the full address; a toast confirms it.
 
@@ -81,10 +81,10 @@ When subagents run, each shows its task name, state (`●` working, `✓` done, 
 ![Status line](docs/images/status-line.png)
 
 ```
-Opus 5.5 high  |  남은 한도 5h 38% 15:40 초기화, 7d 69% 10/15 초기화
+Opus 5.5 high  |  남은 한도 5h 38% 15:40 초기화, 7d 69% 10/15 초기화  |  할 일 2/5  |  결정 2개
 ```
 
-The main conversation's model and effort, and the remaining plan limits (남은 한도) with their reset times (초기화), on one line below the prompt. Limits appear on subscription plans only.
+The main conversation's model and effort, the remaining plan limits (남은 한도) with their reset times (초기화), and todo progress (할 일) with unanswered decisions (결정), on one line below the prompt. Limits appear on subscription plans only; todos and decisions only when there are any.
 
 ## Commands
 

@@ -3,7 +3,11 @@ import type { Host } from '../host'
 import { statusText, type RateLimit } from './text'
 
 /** 상태줄의 모델, effort, 요금제 한도 상태와 표시 */
-export function createStatusLine(deps: { getHost: () => Host | null }) {
+export function createStatusLine(deps: {
+  getHost: () => Host | null
+  /** 상태줄 끝에 붙일 보드 요약 */
+  boardParts: () => string[]
+}) {
   let model: string | null = null
   let effort: string | null = null
   let rateLimits: RateLimit[] = []
@@ -17,6 +21,7 @@ export function createStatusLine(deps: { getHost: () => Host | null }) {
       effort: showModel ? effort : null,
       rateLimits,
       now: Date.now(),
+      board: deps.boardParts(),
     })
     host.status(text || undefined)
   }

@@ -3,14 +3,15 @@ import type { EngineInterface, On } from 'claude-code'
 import { MAIN_ID } from './agents/roster'
 import { createAgents } from './agents/tracker'
 import { asksUser, makesSomething, parseUpdate, updateSummary } from './board/board'
-import { BOARD_TOOL_SPEC, NUDGE } from './board/tool'
+import { BOARD_PROMPT, BOARD_TOOL_SPEC, NUDGE } from './board/tool'
 import { createBoard } from './board/tracker'
-import { isBoardEmpty } from './board/view'
+import { boardStatusParts, isBoardEmpty } from './board/view'
 import * as C from './config'
 import { createFileDetail } from './file-detail/tracker'
 import type { Host } from './host'
 import { dashboardRows, dashboardText, renderDashboard, type DashboardView } from './pane/dashboard'
 import { answerKey } from './pane/board-section'
+import { createPaneController } from './pane/controller'
 import { askKey, renderFileDetail } from './pane/detail'
 import { fileUrl } from './paths'
 import { isUserRequest } from './prompt-origin'
@@ -34,13 +35,7 @@ function createHost($: EngineInterface): Host {
     status: text => $.ui.status(text),
     invalidate: () => $.ui.invalidate('ui.render'),
     openPane: rows =>
-      $.ui.open({
-        id: C.PANE_ID,
-        title: C.PANE_TITLE,
-        closeOnEscape: true,
-        rows,
-        columns: C.PANE_DOCK_COLUMNS,
-      }),
+      $.ui.open({ id: C.PANE_ID, title: C.PANE_TITLE, closeOnEscape: true, rows, columns: C.PANE_DOCK_COLUMNS }),
     closePane: () => $.ui.close({ id: C.PANE_ID }),
     scrollPaneTop: async () => {
       await $.ui.scroll({ in: C.PANE_ID, to: 'start' })
@@ -79,16 +74,17 @@ function createHost($: EngineInterface): Host {
 /** snitch: Claude Code 이벤트를 상태줄, 작업 파일, 변경 이유, 에이전트, 대시보드 패널에 연결 */
 export function register(on: On) {
   let host: Host | null = null
-  let isPaneOpen = false
-  let hasAutoOpened = false
   /** 다음 턴이 사용자가 직접 보낸 요청으로 시작하는지 여부 */
   let isNextTurnUserRequest = false
   let timers: { cancel: () => void }[] = []
 
   const getHost = () => host
-  const redraw = () => {
-    if (isPaneOpen) host?.invalidate()
-  }
+  const pane = createPaneController({
+    getHost,
+    rows: () => dashboardRows(dashboard()),
+    allowsAutoOpen: () => C.ENABLE.workFiles && C.PANE_AUTO_OPEN && workFiles.view().repoRoot !== null,
+  })
+  const redraw = () => pane.redraw()
 
   const workFiles = createWorkFiles({
     getHost,
@@ -114,7 +110,10 @@ export function register(on: On) {
     onChange: redraw,
   })
   const agents = createAgents({ getHost, onChange: redraw })
-  const statusLine = createStatusLine({ getHost })
+  const statusLine = createStatusLine({
+    getHost,
+    boardParts: () => (C.ENABLE.board ? boardStatusParts(board.view().board) : []),
+  })
 
   /** 이름이나 경로 끝부분으로 찾은 변경 파일의 레포 기준 경로 */
   const findFile = (query: string): string | null => {
@@ -128,7 +127,11 @@ export function register(on: On) {
       reasons.noteRequest(text)
       isNextTurnUserRequest = true
     },
-    onChange: redraw,
+    /** 상태줄은 패널이 닫혀 있어도 보이므로 항상 갱신 */
+    onChange: () => {
+      redraw()
+      statusLine.update()
+    },
   })
 
   const dashboard = (): DashboardView => ({
@@ -142,44 +145,37 @@ export function register(on: On) {
   /** 패널을 파일 상세 화면으로 전환 */
   const openFile = (path: string) => {
     fileDetail.open(path)
-    void host?.openPane(C.PANE_MAX_ROWS).catch(() => undefined)
-    void host?.scrollPaneTop().catch(() => undefined)
+    pane.show(C.PANE_MAX_ROWS)
   }
 
   /** 파일 상세 화면에서 목록으로 복귀 */
   const backToList = () => {
     fileDetail.close()
     redraw()
-    void host?.openPane(dashboardRows(dashboard())).catch(() => undefined)
-    void host?.scrollPaneTop().catch(() => undefined)
+    pane.show()
   }
 
   /** 수정 요청 입력칸을 열고 포커스 이동 */
   const askPart = (index: number) => {
     fileDetail.ask(index)
-    if (fileDetail.view().asking === index) void host?.focusPane(askKey(index)).catch(() => undefined)
+    if (fileDetail.view().asking === index) pane.focus(askKey(index))
   }
 
   /** 결정의 직접 답하기 입력칸을 열고 포커스 이동 */
   const toggleAnswering = (id: string) => {
     board.toggleAnswering(id)
-    if (board.view().answering === id) void host?.focusPane(answerKey(id)).catch(() => undefined)
+    if (board.view().answering === id) pane.focus(answerKey(id))
   }
 
   /** 빈 보드에 첫 항목이 생기면 패널 열기 */
   const openIfFirstPin = (wasEmpty: boolean) => {
-    if (!wasEmpty || isPaneOpen || isBoardEmpty(board.view().board) || !host) return
-    isPaneOpen = true
-    void host.openPane(dashboardRows(dashboard())).catch(() => {
-      isPaneOpen = false
-    })
+    if (wasEmpty && !isBoardEmpty(board.view().board)) pane.openUnasked()
   }
 
   on('session.start', async ($, e, next) => {
     host = createHost($)
     const sid = await $.session.id().catch(() => '')
-    isPaneOpen = false
-    hasAutoOpened = false
+    pane.reset()
 
     statusLine.start()
     reasons.clear()
@@ -191,10 +187,10 @@ export function register(on: On) {
     timers.forEach(t => t.cancel())
     timers = [
       host.every(C.CONFLICT_POLL_SEC * 1000, () => {
-        if (isPaneOpen && workFiles.hasTracked()) void workFiles.refresh().catch(() => undefined)
+        if (pane.isOpen() && workFiles.hasTracked()) void workFiles.refresh().catch(() => undefined)
       }),
       host.every(C.AGENT_TICK_SEC * 1000, () => {
-        if (isPaneOpen) void agents.tick().catch(() => undefined)
+        if (pane.isOpen()) void agents.tick().catch(() => undefined)
       }),
     ]
 
@@ -231,6 +227,7 @@ export function register(on: On) {
     board.clear()
     await agents.clear()
     redraw()
+    statusLine.update()
     return r
   })
 
@@ -282,7 +279,7 @@ export function register(on: On) {
       sections.push({ id: 'snitch:change-note', text: NOTE_PROMPT, scope: 'session' as const })
     }
     if (e.tools.includes(C.BOARD_TOOL_ID)) {
-      sections.push({ id: 'snitch:board', text: board.describe(), scope: 'session' as const })
+      sections.push({ id: 'snitch:board', text: `${BOARD_PROMPT}\n${board.describe()}`, scope: 'session' as const })
     }
     return { sections }
   })
@@ -379,35 +376,16 @@ export function register(on: On) {
       return { text: `변경 파일 ${paths.length}개의 이유 다시 정리 중` }
     }
 
-    const isTooNarrowToDock =
-      e.presentation.isFullscreen && e.presentation.columns < C.PANE_MIN_COLUMNS
-    if (arg === 'text' || isTooNarrowToDock) {
+    if (arg === 'text') {
       return { text: dashboardText(dashboard()) }
     }
 
-    const pane = await host.paneState().catch(() => null)
-    if (pane?.isOpen && pane.isPlaced && pane.isShown) {
-      await host.closePane().catch(() => undefined)
-      isPaneOpen = false
-      return { text: '대시보드 패널 닫음' }
-    }
-
-    await host.openPane(dashboardRows(dashboard()))
-    isPaneOpen = true
-    return {}
+    return (await pane.toggle()) === 'closed' ? { text: '대시보드 패널 닫음' } : {}
   }).catch(() => ({ text: '대시보드 불러오기 실패, 잠시 후 다시 시도' }))
 
   /** 전체화면 레이아웃이면 세션당 한 번 패널 자동 열기 */
   on('ui.render', { component: 'PromptHint' }, ($, e, next) => {
-    const canAutoOpen =
-      C.ENABLE.workFiles && C.PANE_AUTO_OPEN && !hasAutoOpened && host !== null && workFiles.view().repoRoot !== null
-    if (canAutoOpen && e.viewport?.isFullscreen === true) {
-      hasAutoOpened = true
-      isPaneOpen = true
-      void host?.openPane(dashboardRows(dashboard())).catch(() => {
-        isPaneOpen = false
-      })
-    }
+    pane.autoOpen(e.viewport?.isFullscreen === true)
     return next(e)
   })
 
@@ -418,7 +396,7 @@ export function register(on: On) {
       return { value: undefined }
     }
     fileDetail.close()
-    isPaneOpen = false
+    pane.closed()
     return next(e)
   })
 

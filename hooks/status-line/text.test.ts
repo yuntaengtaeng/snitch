@@ -54,3 +54,7 @@ test('resetText: 하루 안이면 시:분, 그 뒤면 월/일, 지났거나 모�
   expect(resetText(undefined, NOW)).toBe('')
   expect(resetText('잘못된 값', NOW)).toBe('')
 })
+
+test('statusText: 보드 요약을 맨 끝에 같은 구분자로 붙인다', () => {
+  expect(statusText({ model: null, rateLimits: [], now: NOW, board: ['할 일 2/5', '결정 2개'] })).toBe('할 일 2/5  |  결정 2개')
+})

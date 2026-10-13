@@ -49,9 +49,6 @@ export const PANE_FILE_LINKS = false
 /** 사이드바 패널의 기본 너비(칸) */
 export const PANE_DOCK_COLUMNS = 56
 
-/** 전체화면 레이아웃에서 패널 대신 텍스트로 출력하는 너비 기준(칸) */
-export const PANE_MIN_COLUMNS = 110
-
 /** 다른 세션의 수정 기록을 유효하게 보는 시간(분) */
 export const CONFLICT_TTL_MIN = 30
 

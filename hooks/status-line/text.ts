@@ -40,12 +40,13 @@ export function resetText(resetsAt: string | undefined, now: number): string {
   return ms - now < 24 * HOUR_MS ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : `${at.getMonth() + 1}/${at.getDate()}`
 }
 
-/** 상태줄 문자열, 모델과 effort, 남은 한도와 초기화 시각 */
+/** 상태줄 문자열, 모델과 effort, 남은 한도와 초기화 시각, 보드 요약 */
 export function statusText(input: {
   model?: string | null
   effort?: string | null
   rateLimits: readonly RateLimit[]
   now: number
+  board?: readonly string[]
 }): string {
   const parts: string[] = []
   if (input.model) parts.push([shortModelName(input.model), input.effort].filter(Boolean).join(' '))
@@ -57,6 +58,7 @@ export function statusText(input: {
     })
     .join(', ')
   if (limits) parts.push(`남은 한도 ${limits}`)
+  parts.push(...(input.board ?? []))
 
   return parts.join('  |  ')
 }
