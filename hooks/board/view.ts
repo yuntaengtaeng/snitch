@@ -62,16 +62,3 @@ export function boardText(board: Board): string {
   }
   return lines.join('\n')
 }
-
-/** 보드 구역이 차지할 대략의 줄 수, 비었으면 0 */
-export function boardRows(board: Board): number {
-  let rows = 0
-  if (board.decisions.length > 0) {
-    rows += 3 + board.decisions.reduce((n, d) => n + 2 + (d.answered ? 1 : 0), 0)
-  }
-  if (board.todos.length > 0) {
-    rows += 2 + openTodos(board.todos).length + (doneCount(board.todos) > 0 ? 1 : 0)
-  }
-  if (board.links.length > 0) rows += 2 + board.links.length
-  return rows
-}

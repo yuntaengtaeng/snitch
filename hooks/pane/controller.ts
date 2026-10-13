@@ -1,9 +1,6 @@
 import type { Host } from '../host'
 
-/** 창이 좁아 명령 없이 연 패널이 대기 중일 때의 안내 */
-export const PANE_WAITING_TOAST = '창이 좁아 snitch 패널 대기 중, /snitch 로 입력창 위에 열기'
-
-/** 대시보드 패널의 열림 상태와 열기 정책, 자동 열기는 세션당 한 번 */
+/** 대시보드 패널의 열림 상태와 열기 정책, 자동 열기는 넓은 창에서 세션당 한 번 */
 export function createPaneController(deps: {
   getHost: () => Host | null
   /** 패널을 열 때 요청할 줄 수 */
@@ -13,21 +10,24 @@ export function createPaneController(deps: {
 }) {
   let isOpen = false
   let hasAutoOpened = false
-
-  /** 명령 없이 패널 열기, 엔진이 배치하지 않으면 여는 방법 안내 */
-  async function openOrHint(host: Host) {
-    isOpen = true
-    const opened = await host.openPane(deps.rows()).catch(() => null)
-    if (opened === null) isOpen = false
-    else if (!opened.isPlaced) host.toast(PANE_WAITING_TOAST)
-  }
+  /** 명령 없이 연 패널도 엔진이 대화 옆에 배치하는 너비인지 여부, 좁으면 아이콘 줄 사용 */
+  let isWide = false
+  /** 마지막으로 그린 패널이 대화 옆 사이드바였는지 여부 */
+  let isDocked = false
 
   return {
     isOpen: () => isOpen,
+    isWide: () => isWide,
+    isDocked: () => isDocked,
 
-    /** 열려 있을 때만 다시 그리기 */
-    redraw() {
-      if (isOpen) deps.getHost()?.invalidate()
+    /** 마지막으로 그린 패널 위치 기록 */
+    sawPlacement(docked: boolean) {
+      isDocked = docked
+    },
+
+    /** 마지막으로 그린 화면 너비 기록 */
+    sawViewport(wide: boolean) {
+      isWide = wide
     },
 
     reset() {
@@ -35,19 +35,21 @@ export function createPaneController(deps: {
       hasAutoOpened = false
     },
 
-    /** 전체화면 레이아웃이면 세션당 한 번 열기 */
-    autoOpen(isFullscreen: boolean) {
-      const host = deps.getHost()
-      if (hasAutoOpened || isOpen || !isFullscreen || !host || !deps.allowsAutoOpen()) return
+    /** 넓은 창이면 세션당 한 번 열기 */
+    autoOpen() {
+      if (hasAutoOpened || isOpen || !isWide || !deps.allowsAutoOpen()) return
       hasAutoOpened = true
-      void openOrHint(host)
+      this.openUnasked()
     },
 
-    /** 닫혀 있으면 명령 없이 열기 */
+    /** 넓은 창이고 닫혀 있으면 명령 없이 열기 */
     openUnasked() {
       const host = deps.getHost()
-      if (isOpen || !host) return
-      void openOrHint(host)
+      if (isOpen || !isWide || !host) return
+      isOpen = true
+      void host.openPane(deps.rows()).catch(() => {
+        isOpen = false
+      })
     },
 
     /** 패널을 rows 줄로 다시 열고 맨 위로 스크롤 */
@@ -55,6 +57,22 @@ export function createPaneController(deps: {
       const host = deps.getHost()
       void host?.openPane(rows).catch(() => undefined)
       void host?.scrollPaneTop().catch(() => undefined)
+    },
+
+    /** 사용자가 누른 버튼으로 포커스를 준 채 열기, 좁은 창에서도 입력창 위에 배치 */
+    openFocused() {
+      const host = deps.getHost()
+      if (!host) return
+      isOpen = true
+      void host.openPane(deps.rows(), true).catch(() => {
+        isOpen = false
+      })
+    },
+
+    /** 패널 닫기 */
+    close() {
+      isOpen = false
+      void deps.getHost()?.closePane().catch(() => undefined)
     },
 
     /** 패널 안 요소로 포커스 이동 */

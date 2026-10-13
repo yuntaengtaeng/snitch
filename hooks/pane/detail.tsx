@@ -6,7 +6,7 @@ import type { FileDetailView } from '../file-detail/tracker'
 import { splitPath } from '../paths'
 import { requestLine, type ReasonEntry } from '../reasons/history'
 
-/** 파일 상세 화면을 그리는 부품, 모바일은 Input 이 없어 수정 요청 버튼을 숨김 */
+/** 파일 상세 화면을 그리는 부품, Input 이 없는 화면은 수정 요청 버튼 숨김 */
 export type DetailUi = Pick<Elements[keyof Elements], 'Box' | 'Text' | 'Button' | 'Code' | 'Link'> &
   Partial<Pick<Elements['terminal'], 'Input'>>
 

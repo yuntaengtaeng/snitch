@@ -49,6 +49,15 @@ export const PANE_FILE_LINKS = false
 /** 사이드바 패널의 기본 너비(칸) */
 export const PANE_DOCK_COLUMNS = 56
 
+/** 명령 없이 연 패널을 엔진이 대화 옆에 배치하는 최소 화면 너비(칸), 이보다 좁으면 입력창 위 아이콘 줄 */
+export const PANE_AUTO_OPEN_MIN_COLUMNS = 144
+
+/** 아이콘 줄에 화면 이름까지 붙이는 최소 줄 너비(칸) */
+export const QUICK_LABEL_MIN_COLUMNS = 72
+
+/** 좁은 창에서 아이콘 줄로 잠깐 연 패널 높이(줄) */
+export const PANE_QUICK_ROWS = 12
+
 /** 다른 세션의 수정 기록을 유효하게 보는 시간(분) */
 export const CONFLICT_TTL_MIN = 30
 

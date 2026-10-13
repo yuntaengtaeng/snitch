@@ -169,11 +169,6 @@ export function agentsText(agents: AgentEntry[], now: number): string {
   return lines.join('\n')
 }
 
-/** 에이전트 구역의 예상 줄 수 */
-export function agentsRows(agents: AgentEntry[]): number {
-  return 2 + agents.reduce((n, a) => n + 1 + detailLines(a).length, 0)
-}
-
 /** 메인 대화 말고 표시할 서브에이전트가 있는지 여부 */
 export function hasSubagents(agents: AgentEntry[]): boolean {
   return agents.some(a => a.id !== MAIN_ID)

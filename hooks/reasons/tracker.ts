@@ -89,7 +89,7 @@ export function createReasons(deps: {
     }
   }
 
-  /** 턴의 변경 내용을 먼저 읽고 기준을 옮긴 뒤 요약, 요약 중 다음 턴 편집이 섞이지 않게 함 */
+  /** 턴의 변경 내용을 읽고 기준을 옮긴 뒤 요약 */
   async function closeTurn(paths: string[], unexplained: string[], answer: string, at: Request) {
     const files = await changesOf(unexplained, p => baseline.get(p) ?? null)
     await rememberBaseline(paths)

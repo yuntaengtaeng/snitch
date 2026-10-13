@@ -7,7 +7,7 @@ A Claude Code mod that keeps snitching on what Claude does, right beside the con
 ![snitch in action](docs/images/screen.png)
 
 - **What changed and why**: a one-line reason for every changed file, the reasons per request, and the file's diff with an edit request right there
-- **What is left**: decisions you need to make, todos, and links Claude created, pinned to the top of the pane
+- **What is left**: decisions you need to make, todos, agents and links Claude created, counted in tiles at the top of the pane
 - **Where things stand**: subagents, remaining usage limits with reset times, and a warning when another session edits the same file
 
 Requirements: Claude Code v2.1.287 or later (CLI, Code tab in the desktop app), macOS, Linux, Windows
@@ -33,11 +33,11 @@ Restart Claude Code after installing.
 
 ## Quick start
 
-Open Claude Code in a git repository and work as usual. In the fullscreen layout the pane opens on the right by itself; otherwise open it with `/snitch`.
+Open Claude Code in a git repository and work as usual. In a wide fullscreen layout the pane opens on the right by itself; in a narrow window open it from the icon row at the right end above the prompt, or with `/snitch`.
 
 ![Dashboard pane](docs/images/pane.png)
 
-From the top, the pane shows things to remember, agents, changed files and commits. Empty sections are hidden. Where the pane sits for each screen mode and terminal width is described in [How it works](docs/how-it-works.md#패널-위치) (Korean).
+Tiles for todos (할 일), decisions (결정), agents (에이전트) and links (링크) sit at the top, with changed files and commits below. Press a tile or a file to move to that screen, and Esc to go back. Fold (접기) closes the right sidebar into the same icon row above the prompt. Where the pane sits for each screen mode and terminal width is described in [How it works](docs/how-it-works.md#패널-위치) (Korean).
 
 ## Features
 
@@ -45,7 +45,7 @@ From the top, the pane shows things to remember, agents, changed files and commi
 
 ![Board](docs/images/board.png)
 
-Decisions, todos and links stay pinned to the top of the pane so they don't scroll away.
+Decisions, todos and links are gathered in the tiles at the top of the pane so they don't scroll away.
 
 - **Decisions** (결정 필요): questions Claude needs you to answer. Press an option button or **Answer myself** (직접 답하기); your answer is sent as your prompt and Claude closes the decision. A plain message works too.
 - **Todos** (할 일): multi-step work Claude registers, with the item in progress and the done count.

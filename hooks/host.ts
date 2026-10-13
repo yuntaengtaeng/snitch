@@ -11,8 +11,8 @@ export type Host = {
   now: () => Promise<number>
   status: (text: string | undefined) => void
   invalidate: () => void
-  /** 패널 열기, 사용자가 열지 않은 패널은 좁은 화면이면 배치 대기 */
-  openPane: (rows: number) => Promise<{ isPlaced: boolean }>
+  /** 패널 열기, focus 면 키보드를 패널로, 사용자가 열지 않은 패널은 좁은 화면이면 배치 대기 */
+  openPane: (rows: number, focus?: boolean) => Promise<{ isPlaced: boolean }>
   closePane: () => Promise<void>
   /** 패널 본문을 맨 위로 스크롤 */
   scrollPaneTop: () => Promise<void>
