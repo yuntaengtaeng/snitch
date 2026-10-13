@@ -37,7 +37,11 @@ Open Claude Code in a git repository and work as usual. In a wide fullscreen lay
 
 ![Dashboard pane](docs/images/pane.png)
 
-Tiles for todos (할 일), decisions (결정), agents (에이전트) and links (링크) sit at the top, with changed files and commits below. Press a tile or a file to move to that screen, and Esc to go back. Fold (접기) closes the right sidebar into the same icon row above the prompt. Where the pane sits for each screen mode and terminal width is described in [How it works](docs/how-it-works.md#패널-위치) (Korean).
+Tiles for todos (할 일), decisions (결정), agents (에이전트) and links (링크) sit at the top, with changed files and commits below. Press a tile or a file to move to that screen, and Esc to go back. Fold (접기) closes the right sidebar into the same icon row above the prompt.
+
+![Fold and icon row](docs/images/icon-row.png)
+
+In a narrow window the same icon row shows instead of the pane, and an icon opens that screen briefly. Where the pane sits for each screen mode and terminal width is described in [How it works](docs/how-it-works.md#패널-위치) (Korean).
 
 ## Features
 
@@ -74,7 +78,7 @@ Press a changed file to see its reason history and its diff hunk by hunk. Press 
 
 ![Agents](docs/images/agents.png)
 
-When subagents run, each shows its task name, state (`●` working, `✓` done, `✕` error), elapsed time and last tool call. Finished subagents leave the list on your next request.
+Press the agents tile (에이전트) to see each subagent's task name, state (`●` working, `✓` done, `✕` error), elapsed time and last tool call. Finished subagents leave the list on your next request.
 
 ### Status line
 
